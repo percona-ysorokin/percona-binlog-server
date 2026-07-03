@@ -425,6 +425,51 @@ set_target_properties(lib_models PROPERTIES
 )
 add_library(binsrv::lib_models ALIAS lib_models)
 
+set(operations_source_files
+  src/operations/basic_operation_fwd.hpp
+  src/operations/basic_operation.hpp
+  src/operations/basic_operation.cpp
+
+  src/operations/event_generation_helpers.hpp
+  src/operations/event_generation_helpers.cpp
+
+  src/operations/fetch_operation.hpp
+
+  src/operations/fetch_pull_operation.hpp
+  src/operations/fetch_pull_operation.cpp
+
+  src/operations/generic_operation_fwd.hpp
+
+  src/operations/list_operation.hpp
+  src/operations/list_operation.cpp
+
+  src/operations/logger_helpers.hpp
+  src/operations/logger_helpers.cpp
+
+  src/operations/mode_type_fwd.hpp
+  src/operations/mode_type.hpp
+
+  src/operations/model_helpers.hpp
+  src/operations/model_helpers.cpp
+
+  src/operations/operation_factory.hpp
+  src/operations/operation_factory.cpp
+
+  src/operations/pull_operation.hpp
+
+  src/operations/purge_binlogs_operation.hpp
+  src/operations/purge_binlogs_operation.cpp
+
+  src/operations/search_by_gtid_set_operation.hpp
+  src/operations/search_by_gtid_set_operation.cpp
+
+  src/operations/search_by_timestamp_operation.hpp
+  src/operations/search_by_timestamp_operation.cpp
+
+  src/operations/version_operation.hpp
+  src/operations/version_operation.cpp
+)
+
 set(binsrv_source_files
   # main application files
   src/app.cpp
@@ -468,9 +513,6 @@ set(binsrv_source_files
   src/binsrv/main_config_fwd.hpp
   src/binsrv/main_config.hpp
   src/binsrv/main_config.cpp
-
-  src/binsrv/operation_mode_type_fwd.hpp
-  src/binsrv/operation_mode_type.hpp
 
   src/binsrv/replication_config_fwd.hpp
   src/binsrv/replication_config.hpp
@@ -518,7 +560,7 @@ set(binsrv_source_files
   src/binsrv/time_unit.cpp
 )
 
-add_executable(binlog_server ${binsrv_source_files})
+add_executable(binlog_server ${binsrv_source_files} ${operations_source_files})
 target_link_libraries(binlog_server
   PRIVATE
     binlog_server_compiler_flags
@@ -571,6 +613,7 @@ set(minimysql_source_files
   src/minimysql/connection_context_fwd.hpp
   src/minimysql/connection_context.hpp
   src/minimysql/connection_context.cpp
+  src/minimysql/network_io_operations_fwd.hpp
   src/minimysql/network_io_operations.hpp
   src/minimysql/network_io_operations.cpp
   src/minimysql/network_service.hpp

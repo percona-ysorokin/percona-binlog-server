@@ -13,29 +13,27 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef BINSRV_OPERATION_MODE_TYPE_FWD_HPP
-#define BINSRV_OPERATION_MODE_TYPE_FWD_HPP
+#ifndef OPERATIONS_VERSION_OPERATION_HPP
+#define OPERATIONS_VERSION_OPERATION_HPP
 
-#include <concepts>
-#include <cstdint>
-#include <iosfwd>
+#include "operations/generic_operation_fwd.hpp"
 
-namespace binsrv {
+#include "operations/basic_operation.hpp"
+#include "operations/mode_type.hpp"
 
-enum class operation_mode_type : std::uint8_t;
+#include "util/command_line_helpers_fwd.hpp"
 
-template <typename Char, typename Traits>
-  requires std::same_as<Char, char>
-std::basic_ostream<Char, Traits> &
-operator<<(std::basic_ostream<Char, Traits> &output,
-           operation_mode_type operation_mode);
+namespace operations {
 
-template <typename Char, typename Traits>
-  requires std::same_as<Char, char>
-std::basic_istream<Char, Traits> &
-operator>>(std::basic_istream<Char, Traits> &input,
-           operation_mode_type &operation_mode);
+template <>
+class generic_operation<mode_type::version> : public basic_operation {
+public:
+  static constexpr auto expected_number_of_arguments{0UZ};
 
-} // namespace binsrv
+  explicit generic_operation(util::command_line_arg_view cmd_args);
+  [[nodiscard]] bool execute() const override;
+};
 
-#endif // BINSRV_OPERATION_MODE_TYPE_FWD_HPP
+} // namespace operations
+
+#endif // OPERATIONS_VERSION_OPERATION_HPP

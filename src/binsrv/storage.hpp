@@ -42,7 +42,7 @@
 namespace binsrv {
 
 class [[nodiscard]] storage {
-private:
+public:
   struct binlog_record {
     // binlog file name
     events::composite_binlog_name name;
@@ -60,7 +60,6 @@ private:
   };
   using binlog_record_container = std::vector<binlog_record>;
 
-public:
   static constexpr std::string_view default_binlog_index_name{"binlog.index"};
   static constexpr std::string_view default_binlog_index_entry_path{"."};
   static constexpr std::string_view metadata_name{"metadata.json"};
