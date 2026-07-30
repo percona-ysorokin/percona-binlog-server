@@ -42,6 +42,7 @@ inline constexpr gno_t max_gno{
     std::numeric_limits<std::make_signed_t<gno_t>>::max()};
 
 inline constexpr std::size_t expected_max_gtid_set_length{96U};
+// TODO: in c++26 change to std::inplace_vector
 using gtid_set_storage =
     boost::container::small_vector<std::byte, expected_max_gtid_set_length>;
 

@@ -13,27 +13,27 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/storage_config.hpp"
+#ifndef BINSRV_KEYRING_RECORD_HPP
+#define BINSRV_KEYRING_RECORD_HPP
+
+#include "binsrv/keyring_record_fwd.hpp" // IWYU pragma: export
 
 #include <string>
 
-#include <boost/url/url.hpp>
+#include "util/hex_value.hpp"
+#include "util/nv_tuple.hpp"
 
 namespace binsrv {
 
-[[nodiscard]] std::string storage_config::get_masked_uri() const {
-  boost::urls::url masked_uri{get<"uri">()};
-  if (masked_uri.has_userinfo()) {
-    masked_uri.set_userinfo("***:***");
-  }
-  return masked_uri.c_str();
-}
-
-void storage_config::validate() const {
-  const auto &optional_encryption{get<"encryption">()};
-  if (optional_encryption.has_value()) {
-    optional_encryption->validate();
-  }
-}
+// clang-format off
+struct [[nodiscard]] keyring_record
+    : util::nv_tuple<
+          util::nv<"id", std::string>,
+          util::nv<"algorithm", std::string>,
+          util::nv<"data_hex", util::hex_value>
+      > {};
+// clang-format on
 
 } // namespace binsrv
+
+#endif // BINSRV_KEYRING_RECORD_HPP

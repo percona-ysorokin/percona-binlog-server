@@ -13,27 +13,24 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/storage_config.hpp"
+#ifndef UTIL_HEX_VALUE_FWD_HPP
+#define UTIL_HEX_VALUE_FWD_HPP
 
-#include <string>
+#include <iosfwd>
 
-#include <boost/url/url.hpp>
+#include "util/nv_tuple_json_support.hpp"
 
-namespace binsrv {
+namespace util {
 
-[[nodiscard]] std::string storage_config::get_masked_uri() const {
-  boost::urls::url masked_uri{get<"uri">()};
-  if (masked_uri.has_userinfo()) {
-    masked_uri.set_userinfo("***:***");
-  }
-  return masked_uri.c_str();
-}
+class hex_value;
 
-void storage_config::validate() const {
-  const auto &optional_encryption{get<"encryption">()};
-  if (optional_encryption.has_value()) {
-    optional_encryption->validate();
-  }
-}
+std::ostream &operator<<(std::ostream &output, const hex_value &value);
 
-} // namespace binsrv
+std::istream &operator>>(std::istream &input, hex_value &value);
+
+} // namespace util
+
+template <>
+struct util::is_string_convertible<util::hex_value> : std::true_type {};
+
+#endif // UTIL_HEX_VALUE_FWD_HPP

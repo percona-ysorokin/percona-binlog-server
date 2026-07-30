@@ -16,15 +16,14 @@
 #include "binsrv/main_config.hpp"
 
 #include <cstddef>
-#include <filesystem>
-#include <fstream>
-#include <ios>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
 #include <boost/json/parse.hpp>
 
+// Needed for encryption_format's operator <<
+#include "binsrv/encryption_format_type.hpp" // IWYU pragma: keep
 // Needed for log_severity's operator <<
 #include "binsrv/log_severity.hpp" // IWYU pragma: keep
 // Needed for replication_mode_type's operator <<
@@ -36,6 +35,7 @@
 #include "easymysql/ssl_mode_type.hpp" // IWYU pragma: keep
 
 #include "util/exception_location_helpers.hpp"
+#include "util/file_operations_helpers.hpp"
 #include "util/nv_tuple_from_json.hpp"
 
 namespace binsrv {
@@ -43,27 +43,11 @@ namespace binsrv {
 main_config::main_config(std::string_view file_name) {
   static constexpr std::size_t max_file_size{1048576U};
 
-  const std::filesystem::path file_path{file_name};
-  std::ifstream ifs{file_path};
-  if (!ifs.is_open()) {
-    util::exception_location().raise<std::runtime_error>(
-        "cannot open configuration file");
-  }
-  auto file_size = std::filesystem::file_size(file_path);
-  if (file_size == 0ULL) {
+  const auto file_content =
+      util::read_file_content(file_name, max_file_size, "configuration file");
+  if (file_content.empty()) {
     util::exception_location().raise<std::out_of_range>(
         "configuration file is empty");
-  }
-  if (file_size > max_file_size) {
-    util::exception_location().raise<std::out_of_range>(
-        "configuration file is too large");
-  }
-
-  std::string file_content(file_size, 'x');
-  if (!ifs.read(std::data(file_content),
-                static_cast<std::streamoff>(file_size))) {
-    util::exception_location().raise<std::runtime_error>(
-        "cannot read configuration file content");
   }
 
   auto json_value = boost::json::parse(file_content);
@@ -74,6 +58,7 @@ main_config::main_config(std::string_view file_name) {
 
 void main_config::validate() const {
   root().get<"connection">().validate();
+  root().get<"storage">().validate();
   root().get<"replication">().validate();
 }
 

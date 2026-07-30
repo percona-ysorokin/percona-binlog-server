@@ -13,27 +13,17 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/storage_config.hpp"
+#ifndef BINSRV_BASIC_KEYRING_FWD_HPP
+#define BINSRV_BASIC_KEYRING_FWD_HPP
 
-#include <string>
-
-#include <boost/url/url.hpp>
+#include <memory>
 
 namespace binsrv {
 
-[[nodiscard]] std::string storage_config::get_masked_uri() const {
-  boost::urls::url masked_uri{get<"uri">()};
-  if (masked_uri.has_userinfo()) {
-    masked_uri.set_userinfo("***:***");
-  }
-  return masked_uri.c_str();
-}
+class basic_keyring;
 
-void storage_config::validate() const {
-  const auto &optional_encryption{get<"encryption">()};
-  if (optional_encryption.has_value()) {
-    optional_encryption->validate();
-  }
-}
+using basic_keyring_ptr = std::shared_ptr<basic_keyring>;
 
 } // namespace binsrv
+
+#endif // BINSRV_BASIC_KEYRING_FWD_HPP

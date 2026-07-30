@@ -13,27 +13,20 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/storage_config.hpp"
+#ifndef BINSRV_KEYRING_RECORD_COLLECTION_FWD_HPP
+#define BINSRV_KEYRING_RECORD_COLLECTION_FWD_HPP
 
-#include <string>
-
-#include <boost/url/url.hpp>
+#include <cstdint>
+#include <memory>
 
 namespace binsrv {
 
-[[nodiscard]] std::string storage_config::get_masked_uri() const {
-  boost::urls::url masked_uri{get<"uri">()};
-  if (masked_uri.has_userinfo()) {
-    masked_uri.set_userinfo("***:***");
-  }
-  return masked_uri.c_str();
-}
+class keyring_record_collection;
+using keyring_record_collection_ptr =
+    std::unique_ptr<keyring_record_collection>;
 
-void storage_config::validate() const {
-  const auto &optional_encryption{get<"encryption">()};
-  if (optional_encryption.has_value()) {
-    optional_encryption->validate();
-  }
-}
+inline constexpr std::uint32_t expected_keyring_record_collection_version{1U};
 
 } // namespace binsrv
+
+#endif // BINSRV_KEYRING_RECORD_COLLECTION_FWD_HPP

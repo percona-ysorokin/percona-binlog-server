@@ -495,7 +495,11 @@ The Percona Binary Log Server configuration file has the following format.
     "uri": "https://key_id:secret@192.168.0.100:9000/binsrv-bucket/vault",
     "fs_buffer_directory": "/tmp/binsrv",
     "checkpoint_size": "128M",
-    "checkpoint_interval": "30s"
+    "checkpoint_interval": "30s",
+    "encryption": {
+      "format": "generic",
+      "keyring_uri": "file:///var/lib/pbs/keyring/keyring_data.json"
+    }
   }
 }
 ```
@@ -611,6 +615,36 @@ For example:
 
 ##### Checkpointing on S3
 Please note that S3 API does not provide a way to append a portion of data to an existing object. Currently, in our S3 storage backend "append" operations are implemented as complete object overwrites meaning data re-uploads. Practically, if your typical binlog file size is '1G' and you set `<storage.checkpoint_size>` to '256M', you will upload '256M + 512M + 768M + 1024M = 2560M' (about 2.5 times more then your binlog file size in this example). So, keep balance between the value of this parameter and your typical binlog size. Similar concerns can be raised regarding enabling `<storage.checkpoint_interval>`.
+
+#### \<storage.encryption\> section
+If this section is present, then all the binlog data files will be encrypted before written to the storage.
+- `<storage.encryption.format>` - specifies the encryption format (currently only `generic` is supported).
+- `<storage.encryption.keyring_uri>` - specifies location of the keyring JSON data file (currently only 'file://' scheme is supported meaning that the file should be taken from the local file sytem from the path specified in this URI, e.g. `file:///var/lib/pbs/keyring/keyring_data.json`).
+
+##### Keyring file format
+```json
+{
+  "version": 1,
+  "keys": [
+    {
+      "id": "alpha",
+      "algorithm": "AES-128-ECB",
+      "data_hex": "00112233445566778899AABBCCDDEEFF"
+    },
+    {
+      "id": "beta",
+      "algorithm": "AES-256-GCM",
+      "data_hex": "00112233445566778899AABBCCDDEEFFFFEEDDCCBBAA998877665544332211"
+    }
+  ]
+}
+```
+Keyring JSON file should represent a top-level JSON object with the following keys.
+- `version` - currently should always be equal to `1`.
+- `keys` - should be an array of objects tith the following keys
+  - `id` - a unique string identifier of the key in the keyring.
+  - `algorithm` - the name of the symmetric cypher which should be used with this key (e.g `AES-256-GCM`).
+  - `data_hex` - key bytes in hex format (typically `16`, `24`, or `32` bytes, meaning `32`, `48`, or `64` characters)
 
 ### Resuming previous operation
 

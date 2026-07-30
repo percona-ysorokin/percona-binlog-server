@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2024 Percona and/or its affiliates.
+// Copyright (c) 2023-2026 Percona and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0,
@@ -13,26 +13,20 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/storage_config.hpp"
+#include "binsrv/encryption_config.hpp"
 
-#include <string>
+#include <stdexcept>
 
-#include <boost/url/url.hpp>
+#include "binsrv/encryption_format_type.hpp"
+
+#include "util/exception_location_helpers.hpp"
 
 namespace binsrv {
 
-[[nodiscard]] std::string storage_config::get_masked_uri() const {
-  boost::urls::url masked_uri{get<"uri">()};
-  if (masked_uri.has_userinfo()) {
-    masked_uri.set_userinfo("***:***");
-  }
-  return masked_uri.c_str();
-}
-
-void storage_config::validate() const {
-  const auto &optional_encryption{get<"encryption">()};
-  if (optional_encryption.has_value()) {
-    optional_encryption->validate();
+void encryption_config::validate() const {
+  if (get<"format">() != encryption_format_type::generic) {
+    util::exception_location().raise<std::invalid_argument>(
+        "error validating storage encryption config: unsupported format");
   }
 }
 

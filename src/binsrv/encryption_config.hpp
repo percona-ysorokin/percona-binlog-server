@@ -13,27 +13,30 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/storage_config.hpp"
+#ifndef BINSRV_ENCRYPTION_CONFIG_HPP
+#define BINSRV_ENCRYPTION_CONFIG_HPP
+
+#include "binsrv/encryption_config_fwd.hpp" // IWYU pragma: export
 
 #include <string>
 
-#include <boost/url/url.hpp>
+#include "binsrv/encryption_format_type_fwd.hpp"
+
+#include "util/nv_tuple.hpp"
 
 namespace binsrv {
 
-[[nodiscard]] std::string storage_config::get_masked_uri() const {
-  boost::urls::url masked_uri{get<"uri">()};
-  if (masked_uri.has_userinfo()) {
-    masked_uri.set_userinfo("***:***");
-  }
-  return masked_uri.c_str();
-}
+struct [[nodiscard]] encryption_config
+    : util::nv_tuple<
+          // clang-format off
+          util::nv<"format", encryption_format_type>,
+          util::nv<"keyring_uri", std::string>
+          // clang-format on
+          > {
 
-void storage_config::validate() const {
-  const auto &optional_encryption{get<"encryption">()};
-  if (optional_encryption.has_value()) {
-    optional_encryption->validate();
-  }
-}
+  void validate() const;
+};
 
 } // namespace binsrv
+
+#endif // BINSRV_ENCRYPTION_CONFIG_HPP

@@ -13,27 +13,35 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/storage_config.hpp"
+#include "binsrv/keyring_factory.hpp"
 
-#include <string>
+#include <memory>
+#include <stdexcept>
+#include <string_view>
 
-#include <boost/url/url.hpp>
+#include <boost/url/parse.hpp>
+
+#include "binsrv/basic_keyring_fwd.hpp"
+#include "binsrv/file_keyring.hpp"
+
+#include "util/exception_location_helpers.hpp"
 
 namespace binsrv {
 
-[[nodiscard]] std::string storage_config::get_masked_uri() const {
-  boost::urls::url masked_uri{get<"uri">()};
-  if (masked_uri.has_userinfo()) {
-    masked_uri.set_userinfo("***:***");
+basic_keyring_ptr keyring_factory::create(std::string_view keyring_uri) {
+  const auto uri_parse_result{boost::urls::parse_absolute_uri(keyring_uri)};
+  if (!uri_parse_result) {
+    util::exception_location().raise<std::invalid_argument>(
+        "invalid keyring URI");
   }
-  return masked_uri.c_str();
-}
 
-void storage_config::validate() const {
-  const auto &optional_encryption{get<"encryption">()};
-  if (optional_encryption.has_value()) {
-    optional_encryption->validate();
+  const auto &uri{*uri_parse_result};
+  if (uri.scheme() == file_keyring::uri_schema) {
+    return std::make_shared<file_keyring>(keyring_uri);
   }
+
+  util::exception_location().raise<std::invalid_argument>(
+      "unsupported keyring URI scheme");
 }
 
 } // namespace binsrv

@@ -37,6 +37,7 @@
 
 #include "util/byte_span.hpp"
 #include "util/exception_location_helpers.hpp"
+#include "util/file_operations_helpers.hpp"
 #include "util/native_file_operations_helpers.hpp"
 
 namespace binsrv {
@@ -130,39 +131,8 @@ filesystem_storage_backend::do_list_objects() {
 [[nodiscard]] std::string
 filesystem_storage_backend::do_get_object(std::string_view name) {
   const auto object_path{get_object_path(name)};
-
-  // opening in binary mode
-  std::ifstream object_ifs{};
-  object_ifs.rdbuf()->pubsetbuf(nullptr, 0U);
-  object_ifs.open(object_path, std::ios_base::in | std::ios_base::binary);
-  if (!object_ifs.is_open()) {
-    util::exception_location().raise<std::runtime_error>(
-        "cannot open underlying object file");
-  }
-  if (!object_ifs.seekg(0, std::ios_base::end)) {
-    util::exception_location().raise<std::runtime_error>(
-        "cannot seek underlying object file to the end");
-  }
-  const std::streampos end_pos{object_ifs.tellg()};
-  const auto end_offset{static_cast<std::streamoff>(end_pos)};
-  if (!object_ifs.seekg(0, std::ios_base::beg)) {
-    util::exception_location().raise<std::runtime_error>(
-        "cannot seek underlying object file to the beginning");
-  }
-
-  const auto file_size{static_cast<std::size_t>(end_offset)};
-  if (file_size > max_memory_object_size) {
-    util::exception_location().raise<std::out_of_range>(
-        "underlying object file is too large to be loaded in memory");
-  }
-
-  std::string file_content(file_size, 'x');
-  if (!object_ifs.read(std::data(file_content),
-                       static_cast<std::streamoff>(file_size))) {
-    util::exception_location().raise<std::runtime_error>(
-        "cannot read underlying object file content");
-  }
-  return file_content;
+  return util::read_file_content(object_path, max_memory_object_size,
+                                 "underlying object file");
 }
 
 void filesystem_storage_backend::do_put_object(std::string_view name,
@@ -182,27 +152,8 @@ void filesystem_storage_backend::do_put_object(std::string_view name,
   auto tmp_object_path = object_path;
   tmp_object_path += tmp_object_suffix;
 
-  // opening in binary mode with truncating
-  std::ofstream object_ofs{};
-  object_ofs.rdbuf()->pubsetbuf(nullptr, 0U);
-  object_ofs.open(tmp_object_path, std::ios_base::out | std::ios_base::binary |
-                                       std::ios_base::trunc);
-  if (!object_ofs.is_open()) {
-    util::exception_location().raise<std::runtime_error>(
-        "cannot open underlying tmp object file for writing");
-  }
-  const auto content_sv = util::as_string_view(content);
-  if (!object_ofs.write(std::data(content_sv),
-                        static_cast<std::streamoff>(std::size(content_sv)))) {
-    util::exception_location().raise<std::runtime_error>(
-        "cannot write data to underlying tmp object file");
-  }
-  // explicit close so a failed flush surfaces before the rename
-  object_ofs.close();
-  if (object_ofs.fail()) {
-    util::exception_location().raise<std::runtime_error>(
-        "cannot close underlying tmp object file");
-  }
+  util::write_file_content(tmp_object_path, util::as_string_view(content),
+                           "underlying tmp object file");
   // make the tmp file's content durable before the rename swaps it
   util::fsync(tmp_object_path);
 

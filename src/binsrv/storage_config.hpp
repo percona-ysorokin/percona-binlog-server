@@ -20,6 +20,7 @@
 
 #include <string>
 
+#include "binsrv/encryption_config.hpp" // IWYU pragma: export
 #include "binsrv/size_unit.hpp"
 #include "binsrv/storage_backend_type_fwd.hpp"
 #include "binsrv/time_unit.hpp"
@@ -36,9 +37,15 @@ struct [[nodiscard]] storage_config
           util::nv<"uri", std::string>,
           util::nv<"fs_buffer_directory", util::optional_string>,
           util::nv<"checkpoint_size", optional_size_unit>,
-          util::nv<"checkpoint_interval", optional_time_unit>
+          util::nv<"checkpoint_interval", optional_time_unit>,
+          util::nv<"encryption", optional_encryption_config>
       > {
+  [[nodiscard]] bool has_encryption() const noexcept {
+    return get<"encryption">().has_value();
+  }
   [[nodiscard]] std::string get_masked_uri() const;
+
+  void validate() const;
 };
 // clang-format on
 

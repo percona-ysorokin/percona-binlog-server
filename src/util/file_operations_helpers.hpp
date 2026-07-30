@@ -13,27 +13,23 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/storage_config.hpp"
+#ifndef UTIL_FILE_OPERATIONS_HELPERS_HPP
+#define UTIL_FILE_OPERATIONS_HELPERS_HPP
 
+#include <cstddef>
+#include <filesystem>
 #include <string>
+#include <string_view>
 
-#include <boost/url/url.hpp>
+namespace util {
 
-namespace binsrv {
+[[nodiscard]] std::string read_file_content(const std::filesystem::path &path,
+                                            std::size_t max_size,
+                                            std::string_view error_label);
 
-[[nodiscard]] std::string storage_config::get_masked_uri() const {
-  boost::urls::url masked_uri{get<"uri">()};
-  if (masked_uri.has_userinfo()) {
-    masked_uri.set_userinfo("***:***");
-  }
-  return masked_uri.c_str();
-}
+void write_file_content(const std::filesystem::path &path,
+                        std::string_view content, std::string_view error_label);
 
-void storage_config::validate() const {
-  const auto &optional_encryption{get<"encryption">()};
-  if (optional_encryption.has_value()) {
-    optional_encryption->validate();
-  }
-}
+} // namespace util
 
-} // namespace binsrv
+#endif // UTIL_FILE_OPERATIONS_HELPERS_HPP

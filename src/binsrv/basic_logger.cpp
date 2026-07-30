@@ -30,6 +30,8 @@ namespace binsrv {
 basic_logger::basic_logger(log_severity min_level) noexcept
     : min_level_{min_level} {}
 
+basic_logger::~basic_logger() = default;
+
 void basic_logger::log(log_severity level, std::string_view message) {
   if (level >= min_level_) {
     // the length of the longest log severity label

@@ -31,7 +31,7 @@ public:
   basic_logger(basic_logger &&) = delete;
   basic_logger &operator=(basic_logger &&) = delete;
 
-  virtual ~basic_logger() = default;
+  virtual ~basic_logger();
 
   [[nodiscard]] log_severity get_min_level() const noexcept {
     return min_level_;
