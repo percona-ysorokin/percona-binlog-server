@@ -21,6 +21,7 @@
 #include <string>
 #include <string_view>
 
+#include "binsrv/encryption_format_type_fwd.hpp"
 #include "binsrv/replication_mode_type_fwd.hpp"
 
 #include "util/nv_tuple.hpp"
@@ -32,7 +33,8 @@ private:
   using impl_type = util::nv_tuple<
       // clang-format off
       util::nv<"version", std::uint32_t>,
-      util::nv<"mode", replication_mode_type>
+      util::nv<"mode", replication_mode_type>,
+      util::nv<"encryption", optional_encryption_format_type>
       // clang-format on
       >;
 

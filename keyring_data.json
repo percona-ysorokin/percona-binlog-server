@@ -3,12 +3,12 @@
   "keys": [
     {
       "id": "alpha",
-      "algorithm": "AES-128-ECB",
+      "cipher": "AES-128-ECB",
       "data_hex": "00112233445566778899AABBCCDDEEFF"
     },
     {
       "id": "beta",
-      "algorithm": "AES-256-GCM",
+      "cipher": "AES-256-GCM",
       "data_hex": "00112233445566778899AABBCCDDEEFFFFEEDDCCBBAA998877665544332211"
     }
   ]

@@ -25,14 +25,23 @@
 
 namespace binsrv {
 
-// clang-format off
 struct [[nodiscard]] keyring_record
     : util::nv_tuple<
+          // clang-format off
           util::nv<"id", std::string>,
-          util::nv<"algorithm", std::string>,
+          util::nv<"cipher", std::string>,
           util::nv<"data_hex", util::hex_value>
-      > {};
-// clang-format on
+          // clang-format on
+          > {
+  [[nodiscard]] std::string get_description() const {
+    std::string result;
+    result += get<"id">();
+    result += '(';
+    result += get<"cipher">();
+    result += ')';
+    return result;
+  }
+};
 
 } // namespace binsrv
 

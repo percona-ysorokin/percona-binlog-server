@@ -39,12 +39,10 @@
 
 #include "app_version.hpp"
 
-#include "binsrv/basic_keyring.hpp"
 #include "binsrv/basic_logger.hpp"
 // needed for encryption_format_type's operator <<
 #include "binsrv/encryption_format_type.hpp" // IWYU pragma: keep
 #include "binsrv/exception_handling_helpers.hpp"
-#include "binsrv/keyring_factory.hpp"
 #include "binsrv/log_severity.hpp"
 #include "binsrv/logger_factory.hpp"
 #include "binsrv/main_config.hpp"
@@ -304,6 +302,10 @@ void log_storage_info(binsrv::basic_logger &logger,
     msg += std::to_string(storage.get_current_position());
   }
   logger.log(binsrv::log_severity::info, msg);
+  logger.log(binsrv::log_severity::info,
+             "keyring status: " + storage.get_keyring_description());
+  logger.log(binsrv::log_severity::info,
+             "active KEK: " + storage.get_active_kek_description());
 }
 
 void log_library_info(binsrv::basic_logger &logger,
@@ -1327,15 +1329,6 @@ int main(int argc, char *argv[]) {
     const auto verify_checksum{replication_config.get<"verify_checksum">()};
     const auto replication_mode{replication_config.get<"mode">()};
     const auto optional_rewrite_config{replication_config.get<"rewrite">()};
-    const auto &optional_encryption_config{storage_config.get<"encryption">()};
-
-    binsrv::basic_keyring_ptr keyring;
-    if (optional_encryption_config.has_value()) {
-      keyring = binsrv::keyring_factory::create(
-          optional_encryption_config->get<"keyring_uri">());
-      logger->log(binsrv::log_severity::info,
-                  "initialized keyring: " + keyring->get_description());
-    }
 
     binsrv::storage storage{storage_config,
                             binsrv::storage_construction_mode_type::streaming,

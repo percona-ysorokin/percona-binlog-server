@@ -50,7 +50,8 @@ keyring_record_collection::get_key(std::string_view key_id) const {
         return key.get<"id">() == key_id;
       });
   if (key_it == std::end(keys)) {
-    util::exception_location().raise<std::out_of_range>("key not found");
+    util::exception_location().raise<std::out_of_range>(
+        "key not found in the keyring record collection");
   }
   return *key_it;
 }
@@ -69,10 +70,7 @@ void keyring_record_collection::validate() const {
   result += " key(s):";
   for (const auto &key : keys) {
     result += ' ';
-    result += key.get<"id">();
-    result += '(';
-    result += key.get<"algorithm">();
-    result += ')';
+    result += key.get_description();
   }
   return result;
 }

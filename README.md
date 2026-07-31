@@ -498,7 +498,9 @@ The Percona Binary Log Server configuration file has the following format.
     "checkpoint_interval": "30s",
     "encryption": {
       "format": "generic",
-      "keyring_uri": "file:///var/lib/pbs/keyring/keyring_data.json"
+      "keyring_uri": "file:///var/lib/pbs/keyring/keyring_data.json",
+      "kek_id": "alpha",
+      "cipher": "AES-256-CTR"
     }
   }
 }
@@ -620,6 +622,8 @@ Please note that S3 API does not provide a way to append a portion of data to an
 If this section is present, then all the binlog data files will be encrypted before written to the storage.
 - `<storage.encryption.format>` - specifies the encryption format (currently only `generic` is supported).
 - `<storage.encryption.keyring_uri>` - specifies location of the keyring JSON data file (currently only 'file://' scheme is supported meaning that the file should be taken from the local file sytem from the path specified in this URI, e.g. `file:///var/lib/pbs/keyring/keyring_data.json`).
+- `<storage.encryption.kek_id>` - specifies the ID of the key that must be used as a key-encryption-key (KEK). This ID must be present in the keyring.
+- `<storage.encryption.cipher>` - specifies the data-encryption cipher name used binlog data file encryption (e.g. `AES-256-CTR`).
 
 ##### Keyring file format
 ```json
@@ -628,12 +632,12 @@ If this section is present, then all the binlog data files will be encrypted bef
   "keys": [
     {
       "id": "alpha",
-      "algorithm": "AES-128-ECB",
+      "cipher": "AES-128-ECB",
       "data_hex": "00112233445566778899AABBCCDDEEFF"
     },
     {
       "id": "beta",
-      "algorithm": "AES-256-GCM",
+      "cipher": "AES-256-GCM",
       "data_hex": "00112233445566778899AABBCCDDEEFFFFEEDDCCBBAA998877665544332211"
     }
   ]
@@ -643,7 +647,7 @@ Keyring JSON file should represent a top-level JSON object with the following ke
 - `version` - currently should always be equal to `1`.
 - `keys` - should be an array of objects tith the following keys
   - `id` - a unique string identifier of the key in the keyring.
-  - `algorithm` - the name of the symmetric cypher which should be used with this key (e.g `AES-256-GCM`).
+  - `cipher` - the name of the symmetric cypher which should be used with this key (e.g `AES-256-GCM`).
   - `data_hex` - key bytes in hex format (typically `16`, `24`, or `32` bytes, meaning `32`, `48`, or `64` characters)
 
 ### Resuming previous operation

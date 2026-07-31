@@ -23,6 +23,8 @@
 #include <boost/json/serialize.hpp>
 #include <boost/json/value.hpp>
 
+// Needed for encryption_format_type's operator <<
+#include "binsrv/encryption_format_type.hpp" // IWYU pragma: keep
 // Needed for replication_mode_type's operator <<
 #include "binsrv/replication_mode_type.hpp" // IWYU pragma: keep
 
@@ -32,7 +34,7 @@
 namespace binsrv {
 
 storage_metadata::storage_metadata()
-    : impl_{{expected_storage_metadata_version}, {}} {}
+    : impl_{{expected_storage_metadata_version}, {}, {}} {}
 
 storage_metadata::storage_metadata(std::string_view data) : impl_{} {
   auto json_value = boost::json::parse(data);

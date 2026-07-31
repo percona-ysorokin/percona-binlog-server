@@ -30,8 +30,11 @@
 #include <utility>
 #include <vector>
 
+#include "binsrv/basic_keyring.hpp"
 #include "binsrv/basic_storage_backend.hpp"
 #include "binsrv/binlog_file_metadata.hpp"
+#include "binsrv/encryption_format_type_fwd.hpp"
+#include "binsrv/keyring_factory.hpp"
 #include "binsrv/replication_mode_type.hpp"
 #include "binsrv/storage_backend_factory.hpp"
 #include "binsrv/storage_config.hpp"
@@ -66,6 +69,16 @@ storage::storage(const storage_config &config,
         std::chrono::seconds{checkpoint_interval_opt->get_value()};
   }
 
+  const auto &encryption_config{config.get<"encryption">()};
+  optional_encryption_format_type encryption_format{};
+  if (encryption_config.has_value()) {
+    encryption_format = encryption_config->get<"format">();
+    encryption_format_ = encryption_format;
+    keyring_ = keyring_factory::create(encryption_config->get<"keyring_uri">());
+    active_kek_ = keyring_->get_key(encryption_config->get<"kek_id">());
+    active_data_cipher_ = encryption_config->get<"cipher">();
+  }
+
   backend_ = storage_backend_factory::create(config);
 
   auto storage_objects{backend_->list_objects()};
@@ -85,7 +98,7 @@ storage::storage(const storage_config &config,
   storage_objects.erase(metadata_it);
 
   load_metadata();
-  validate_metadata(replication_mode);
+  validate_metadata(replication_mode, encryption_format);
 
   // if after metadata erasure 'storage_objects' is empty, then this mean
   // that it has only metadata in it that passes validation and we can
@@ -406,6 +419,16 @@ storage::purge_binlogs(const events::composite_binlog_name &target) {
   return backend_->get_object_uri(binlog_name.str());
 }
 
+[[nodiscard]] std::string storage::get_keyring_description() const {
+  return is_encryption_enabled() ? keyring_->get_description()
+                                 : "keyring is not initialized";
+}
+
+[[nodiscard]] std::string storage::get_active_kek_description() const {
+  return is_encryption_enabled() ? active_kek_.get_description()
+                                 : "active KEK is not set";
+}
+
 void storage::ensure_streaming_mode() const {
   if (construction_mode_ != storage_construction_mode_type::streaming) {
     util::exception_location().raise<std::logic_error>(
@@ -584,19 +607,29 @@ void storage::load_metadata() {
   const auto metadata_content{backend_->get_object(metadata_name)};
   const storage_metadata metadata{metadata_content};
   replication_mode_ = metadata.root().get<"mode">();
+  encryption_format_ = metadata.root().get<"encryption">();
 }
 
-void storage::validate_metadata(replication_mode_type replication_mode) const {
+void storage::validate_metadata(
+    replication_mode_type replication_mode,
+    const optional_encryption_format_type &encryption_format) const {
   if (replication_mode != replication_mode_) {
     util::exception_location().raise<std::logic_error>(
         "replication mode provided to initialize storage differs from the one "
         "stored in metadata");
+  }
+
+  if (encryption_format != encryption_format_) {
+    util::exception_location().raise<std::logic_error>(
+        "storage encryption format provided to initialize storage differs from "
+        "the one stored in metadata");
   }
 }
 
 void storage::save_metadata() const {
   storage_metadata metadata{};
   metadata.root().get<"mode">() = replication_mode_;
+  metadata.root().get<"encryption">() = encryption_format_;
   const auto content{metadata.str()};
   backend_->put_object(metadata_name, util::as_const_byte_span(content));
 }

@@ -44,7 +44,9 @@
     "checkpoint_interval": "30s",
     "encryption": {
       "format": "generic",
-      "keyring_uri": "file:///home/user/keyring/keyring/keyring_data.json"
+      "keyring_uri": "file:///home/user/keyring/keyring/keyring_data.json",
+      "kek_id": "alpha",
+      "cipher": "AES-256-CTR"
     }
   }
 }

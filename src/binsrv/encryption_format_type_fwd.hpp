@@ -19,12 +19,14 @@
 #include <concepts>
 #include <cstdint>
 #include <iosfwd>
+#include <optional>
 
 #include "util/nv_tuple_json_support.hpp"
 
 namespace binsrv {
 
 enum class encryption_format_type : std::uint8_t;
+using optional_encryption_format_type = std::optional<encryption_format_type>;
 
 template <typename Char, typename Traits>
   requires std::same_as<Char, char>

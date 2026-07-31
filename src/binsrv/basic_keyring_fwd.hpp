@@ -22,7 +22,7 @@ namespace binsrv {
 
 class basic_keyring;
 
-using basic_keyring_ptr = std::shared_ptr<basic_keyring>;
+using basic_keyring_ptr = std::unique_ptr<basic_keyring>;
 
 } // namespace binsrv
 

@@ -37,7 +37,7 @@ basic_keyring_ptr keyring_factory::create(std::string_view keyring_uri) {
 
   const auto &uri{*uri_parse_result};
   if (uri.scheme() == file_keyring::uri_schema) {
-    return std::make_shared<file_keyring>(keyring_uri);
+    return std::make_unique<file_keyring>(keyring_uri);
   }
 
   util::exception_location().raise<std::invalid_argument>(

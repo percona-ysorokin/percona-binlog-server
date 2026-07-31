@@ -30,7 +30,9 @@ struct [[nodiscard]] encryption_config
     : util::nv_tuple<
           // clang-format off
           util::nv<"format", encryption_format_type>,
-          util::nv<"keyring_uri", std::string>
+          util::nv<"keyring_uri", std::string>,
+          util::nv<"kek_id", std::string>,
+          util::nv<"cipher", std::string>
           // clang-format on
           > {
 

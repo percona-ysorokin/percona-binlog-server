@@ -24,7 +24,10 @@
 #include <utility>
 #include <vector>
 
+#include "binsrv/basic_keyring_fwd.hpp"
 #include "binsrv/basic_storage_backend_fwd.hpp"
+#include "binsrv/encryption_format_type_fwd.hpp"
+#include "binsrv/keyring_record.hpp"
 #include "binsrv/replication_mode_type_fwd.hpp"
 #include "binsrv/storage_config_fwd.hpp"
 
@@ -170,8 +173,18 @@ public:
   [[nodiscard]] std::string
   get_binlog_uri(const events::composite_binlog_name &binlog_name) const;
 
+  [[nodiscard]] bool is_encryption_enabled() const noexcept {
+    return static_cast<bool>(keyring_);
+  }
+  [[nodiscard]] std::string get_keyring_description() const;
+  [[nodiscard]] std::string get_active_kek_description() const;
+
 private:
   storage_construction_mode_type construction_mode_;
+  basic_keyring_ptr keyring_;
+  optional_encryption_format_type encryption_format_;
+  keyring_record active_kek_;
+  std::string active_data_cipher_{};
   basic_storage_backend_ptr backend_;
 
   replication_mode_type replication_mode_;
@@ -238,7 +251,9 @@ private:
   void save_binlog_index() const;
 
   void load_metadata();
-  void validate_metadata(replication_mode_type replication_mode) const;
+  void validate_metadata(
+      replication_mode_type replication_mode,
+      const optional_encryption_format_type &encryption_format) const;
   void save_metadata() const;
 
   [[nodiscard]] static std::string generate_binlog_metadata_name(
