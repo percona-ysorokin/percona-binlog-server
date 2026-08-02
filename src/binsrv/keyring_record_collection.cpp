@@ -42,18 +42,19 @@ keyring_record_collection::keyring_record_collection(std::string_view file_name)
   validate();
 }
 
+[[nodiscard]] bool
+keyring_record_collection::contains_key(std::string_view key_id) const {
+  return find_key_internal(key_id) != std::cend(root().get<"keys">());
+}
+
 [[nodiscard]] const keyring_record &
 keyring_record_collection::get_key(std::string_view key_id) const {
-  const auto &keys{root().get<"keys">()};
-  const auto key_it =
-      std::ranges::find_if(keys, [key_id](const keyring_record &key) {
-        return key.get<"id">() == key_id;
-      });
-  if (key_it == std::end(keys)) {
+  const auto fnd_it{find_key_internal(key_id)};
+  if (fnd_it == std::cend(root().get<"keys">())) {
     util::exception_location().raise<std::out_of_range>(
         "key not found in the keyring record collection");
   }
-  return *key_it;
+  return *fnd_it;
 }
 
 void keyring_record_collection::validate() const {
@@ -73,6 +74,14 @@ void keyring_record_collection::validate() const {
     result += key.get_description();
   }
   return result;
+}
+
+[[nodiscard]] keyring_record_collection::key_collection::const_iterator
+keyring_record_collection::find_key_internal(std::string_view key_id) const {
+  const auto &keys{root().get<"keys">()};
+  return std::ranges::find_if(keys, [key_id](const keyring_record &key) {
+    return key.get<"id">() == key_id;
+  });
 }
 
 } // namespace binsrv

@@ -84,8 +84,11 @@ file_keyring::file_keyring(std::string_view keyring_uri) : key_file_path_{} {
 
 file_keyring::~file_keyring() = default;
 
+[[nodiscard]] bool file_keyring::do_contains(std::string_view key_id) const {
+  return keyring_records_->contains_key(key_id);
+}
 [[nodiscard]] const keyring_record &
-file_keyring::do_get_key(std::string_view key_id) {
+file_keyring::do_get_key(std::string_view key_id) const {
   return keyring_records_->get_key(key_id);
 }
 [[nodiscard]] std::string file_keyring::do_get_description() const {

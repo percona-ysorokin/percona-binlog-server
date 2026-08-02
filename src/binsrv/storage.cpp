@@ -23,6 +23,8 @@
 #include <exception>
 #include <filesystem>
 #include <iterator>
+#include <optional>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -30,11 +32,14 @@
 #include <utility>
 #include <vector>
 
+#include <boost/algorithm/string/case_conv.hpp>
+
 #include "binsrv/basic_keyring.hpp"
 #include "binsrv/basic_storage_backend.hpp"
 #include "binsrv/binlog_file_metadata.hpp"
 #include "binsrv/encryption_format_type_fwd.hpp"
 #include "binsrv/keyring_factory.hpp"
+#include "binsrv/keyring_record.hpp"
 #include "binsrv/replication_mode_type.hpp"
 #include "binsrv/storage_backend_factory.hpp"
 #include "binsrv/storage_config.hpp"
@@ -48,6 +53,7 @@
 #include "binsrv/gtids/gtid_set.hpp"
 
 #include "util/byte_span.hpp"
+#include "util/conversion_helpers.hpp"
 #include "util/ctime_timestamp.hpp"
 #include "util/exception_location_helpers.hpp"
 
@@ -75,7 +81,14 @@ storage::storage(const storage_config &config,
     encryption_format = encryption_config->get<"format">();
     encryption_format_ = encryption_format;
     keyring_ = keyring_factory::create(encryption_config->get<"keyring_uri">());
-    active_kek_ = keyring_->get_key(encryption_config->get<"kek_id">());
+    const auto &kek_id{encryption_config->get<"kek_id">()};
+    if (!keyring_->contains(kek_id)) {
+      util::exception_location().raise<std::runtime_error>(
+          "keyring does not contain the specified KEK ID");
+    }
+    // TODO: validate that the length of the KEK in the keyring record match
+    //       the length specified in the cipher name
+    active_kek_id_ = kek_id;
     active_data_cipher_ = encryption_config->get<"cipher">();
   }
 
@@ -425,8 +438,9 @@ storage::purge_binlogs(const events::composite_binlog_name &target) {
 }
 
 [[nodiscard]] std::string storage::get_active_kek_description() const {
-  return is_encryption_enabled() ? active_kek_.get_description()
-                                 : "active KEK is not set";
+  return is_encryption_enabled()
+             ? keyring_->get_key(active_kek_id_).get_description()
+             : "active KEK is not set";
 }
 
 void storage::ensure_streaming_mode() const {
@@ -465,10 +479,11 @@ void storage::update_last_checkpoint_info() {
     added_binlog_gtids = gtids::gtid_set{};
   }
 
-  binlog_records_.emplace_back(binlog_name, events::magic_binlog_offset,
-                               std::move(previous_binlog_gtids),
-                               std::move(added_binlog_gtids),
-                               util::ctime_timestamp_range{});
+  binlog_records_.emplace_back(
+      binlog_name, events::magic_binlog_offset,
+      std::move(previous_binlog_gtids), std::move(added_binlog_gtids),
+      util::ctime_timestamp_range{}, events::seq_no_t{},
+      generate_binlog_encryption_record());
   save_binlog_metadata(get_current_binlog_record());
   save_binlog_index();
   return open_binlog_status::created;
@@ -647,6 +662,48 @@ void storage::save_metadata() const {
       backend_->get_object(generate_binlog_metadata_name(binlog_name))};
   binlog_file_metadata metadata{content};
 
+  const auto encryption_info_extractor{
+      [](const optional_binlog_file_encryption_metadata &encryption_metadata)
+          -> optional_binlog_encryption_record {
+        if (!encryption_metadata.has_value()) {
+          return std::nullopt;
+        }
+        binlog_encryption_record encryption_record{};
+
+        const auto &file_key_envelope{
+            encryption_metadata->get<"file_key_envelope">()};
+        encryption_record.kek_id = file_key_envelope.get<"kek_id">();
+        const auto file_key_raw{file_key_envelope.get<"data_hex">().get_data()};
+        encryption_record.file_key_encrypted_with_kek.assign(
+            std::cbegin(file_key_raw), std::cend(file_key_raw));
+        if (file_key_envelope.get<"iv_hex">().has_value()) {
+          const auto file_key_iv_raw{
+              file_key_envelope.get<"iv_hex">()->get_data()};
+          encryption_record.iv_for_file_key_encryption.emplace(
+              std::cbegin(file_key_iv_raw), std::cend(file_key_iv_raw));
+        }
+        if (file_key_envelope.get<"tag_hex">().has_value()) {
+          const auto file_key_tag_raw{
+              file_key_envelope.get<"tag_hex">()->get_data()};
+          encryption_record.tag_of_file_key_encryption.emplace(
+              std::cbegin(file_key_tag_raw), std::cend(file_key_tag_raw));
+        }
+
+        const auto &file_data_envelope{
+            encryption_metadata->get<"file_data_envelope">()};
+        encryption_record.data_cipher = file_data_envelope.get<"cipher">();
+        const auto file_data_iv_raw{
+            file_data_envelope.get<"iv_hex">().get_data()};
+        encryption_record.iv_for_data_encryption.assign(
+            std::cbegin(file_data_iv_raw), std::cend(file_data_iv_raw));
+        if (file_data_envelope.get<"tag_hex">().has_value()) {
+          const auto file_data_tag_raw{
+              file_data_envelope.get<"tag_hex">()->get_data()};
+          encryption_record.tag_of_data_encryption.emplace(
+              std::cbegin(file_data_tag_raw), std::cend(file_data_tag_raw));
+        }
+        return encryption_record;
+      }};
   return binlog_record{
       .name = binlog_name,
       .size = metadata.root().get<"size">(),
@@ -654,7 +711,9 @@ void storage::save_metadata() const {
       .added_gtids = metadata.root().get<"added_gtids">(),
       .timestamps = {metadata.root().get<"min_timestamp">(),
                      metadata.root().get<"max_timestamp">()},
-      .last_sequence_number = metadata.root().get<"last_sequence_number">()};
+      .last_sequence_number = metadata.root().get<"last_sequence_number">(),
+      .encryption =
+          encryption_info_extractor(metadata.root().get<"encryption">())};
 }
 
 void storage::validate_binlog_metadata(const binlog_record &record) const {
@@ -695,6 +754,34 @@ void storage::save_binlog_metadata(const binlog_record &record) const {
   metadata.root().get<"max_timestamp">() =
       util::ctime_timestamp{record.timestamps.get_max_timestamp()};
   metadata.root().get<"last_sequence_number">() = record.last_sequence_number;
+  const auto &record_encryption{record.encryption};
+  if (record_encryption.has_value()) {
+    binlog_file_encryption_metadata encryption_metadata{};
+
+    auto &file_key_envelope{encryption_metadata.get<"file_key_envelope">()};
+    file_key_envelope.get<"kek_id">() = record_encryption->kek_id;
+    file_key_envelope.get<"data_hex">() =
+        record_encryption->file_key_encrypted_with_kek;
+    if (record_encryption->iv_for_file_key_encryption.has_value()) {
+      file_key_envelope.get<"iv_hex">() =
+          *record_encryption->iv_for_file_key_encryption;
+    }
+    if (record_encryption->tag_of_file_key_encryption.has_value()) {
+      file_key_envelope.get<"tag_hex">() =
+          *record_encryption->tag_of_file_key_encryption;
+    }
+
+    auto &file_data_envelope{encryption_metadata.get<"file_data_envelope">()};
+    file_data_envelope.get<"cipher">() = record_encryption->data_cipher;
+    file_data_envelope.get<"iv_hex">() =
+        record_encryption->iv_for_data_encryption;
+    if (record_encryption->tag_of_data_encryption.has_value()) {
+      file_data_envelope.get<"tag_hex">() =
+          *record_encryption->tag_of_data_encryption;
+    }
+
+    metadata.root().get<"encryption">() = std::move(encryption_metadata);
+  }
   const auto content{metadata.str()};
   backend_->put_object(generate_binlog_metadata_name(record.name),
                        util::as_const_byte_span(content));
@@ -757,6 +844,153 @@ void storage::load_and_validate_binlog_metadata_set(
   if (optional_added_gtids.has_value()) {
     purged_gtids_ = *optional_added_gtids;
   }
+}
+
+[[nodiscard]] storage::optional_binlog_encryption_record
+storage::generate_binlog_encryption_record() const {
+  if (!is_encryption_enabled()) {
+    return std::nullopt;
+  }
+
+  const auto &keyring_record{keyring_->get_key(active_kek_id_)};
+  const auto &kek_cipher{keyring_record.get<"cipher">()};
+  const auto &kek_data{keyring_record.get<"data_hex">().get_data()};
+
+  // identify initialization vector length based on the cipher
+  // TODO: rework with proper OpenSSL "EVP_CIPHER_iv_length()" call
+  const auto iv_length_helper{[](const std::string &cipher) -> std::size_t {
+    const auto normalized_cipher{boost::algorithm::to_upper_copy(cipher)};
+
+    static constexpr std::size_t no_iv_length{0U};
+    static constexpr std::size_t generic_iv_length{16U};
+    static constexpr std::size_t gcm_iv_length{12U};
+    if (normalized_cipher.ends_with("-ECB")) {
+      return no_iv_length;
+    }
+    if (normalized_cipher.ends_with("-GCM")) {
+      return gcm_iv_length;
+    }
+    if (normalized_cipher.ends_with("-CBC") ||
+        normalized_cipher.ends_with("-CTR")) {
+      return generic_iv_length;
+    }
+    util::exception_location().raise<std::logic_error>(
+        "unsupported cipher mode: " + cipher);
+  }};
+
+  // identify the length of the key based on the cipher
+  // TODO: rework with proper OpenSSL "EVP_CIPHER_key_length()" call
+  const auto key_length_helper{[](const std::string &cipher) -> std::size_t {
+    static constexpr std::size_t x_128_key_length{16U};
+    static constexpr std::size_t x_192_key_length{24U};
+    static constexpr std::size_t x_256_key_length{32U};
+    if (cipher.find("-128-") != std::string::npos) {
+      return x_128_key_length;
+    }
+    if (cipher.find("-192-") != std::string::npos) {
+      return x_192_key_length;
+    }
+    if (cipher.find("-256-") != std::string::npos) {
+      return x_256_key_length;
+    }
+    util::exception_location().raise<std::logic_error>(
+        "unsupported cipher length: " + cipher);
+  }};
+  // identify the length of the tag based on the cipher
+  // TODO: rework with proper OpenSSL call
+  const auto tag_length_helper{[](const std::string &cipher) -> std::size_t {
+    const auto normalized_cipher{boost::algorithm::to_upper_copy(cipher)};
+    static constexpr std::size_t no_tag_length{0U};
+    static constexpr std::size_t gcm_tag_length{16U};
+
+    if (normalized_cipher.ends_with("-GCM")) {
+      return gcm_tag_length;
+    }
+    if (normalized_cipher.ends_with("-ECB") ||
+        normalized_cipher.ends_with("-CBC") ||
+        normalized_cipher.ends_with("-CTR")) {
+      return no_tag_length;
+    }
+    util::exception_location().raise<std::logic_error>(
+        "unsupported cipher mode: " + cipher);
+  }};
+
+  // generating a random blob
+  // TODO: rework with proper OpenSSL RAND_bytes() call
+  const auto random_blob_helper{
+      [](std::size_t length) -> util::hex_value_storage {
+        static std::random_device rd_instance;
+        util::hex_value_storage result(length);
+        std::ranges::generate(result, []() {
+          return util::from_underlying<std::byte>(
+              static_cast<std::uint8_t>(rd_instance()));
+        });
+        return result;
+      }};
+
+  const auto iv_length_for_file_key_encryption{iv_length_helper(kek_cipher)};
+  util::optional_hex_value_storage iv_for_file_key_encryption{};
+  util::const_byte_span iv_for_file_key_encryption_v{};
+  if (iv_length_for_file_key_encryption != 0U) {
+    iv_for_file_key_encryption =
+        random_blob_helper(iv_length_for_file_key_encryption);
+    iv_for_file_key_encryption_v = *iv_for_file_key_encryption;
+  }
+
+  const auto file_key_length{key_length_helper(kek_cipher)};
+  const auto file_key_data{random_blob_helper(file_key_length)};
+
+  // TODO: implement encryption using OpenSSL EVP interface
+  const auto encrypt_helper{
+      [&tag_length_helper](
+          const std::string &cipher,
+          // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+          [[maybe_unused]] util::const_byte_span key_data,
+          [[maybe_unused]] util::const_byte_span iv_data,
+          util::const_byte_span data)
+          -> std::pair<util::hex_value_storage,
+                       util::optional_hex_value_storage> {
+        util::optional_hex_value_storage tag{};
+        const std::size_t tag_size{tag_length_helper(cipher)};
+        if (tag_size != 0U) {
+          tag = util::hex_value_storage(tag_size);
+          std::ranges::generate(
+              *tag, [counter{static_cast<std::uint8_t>(0U)}]() mutable {
+                return util::from_underlying<std::byte>(counter++);
+              });
+        }
+        util::hex_value_storage encrypted_data(std::size(data));
+        std::ranges::transform(
+            data, std::begin(encrypted_data), [](std::byte element) {
+              return std::byte{
+                  static_cast<std::uint8_t>(util::to_underlying(element) + 1U)};
+            });
+
+        return {encrypted_data, tag};
+      }};
+
+  const auto file_key_encryption_result{encrypt_helper(
+      kek_cipher, kek_data, iv_for_file_key_encryption_v, file_key_data)};
+
+  const auto iv_length_for_data_encryption{
+      iv_length_helper(active_data_cipher_)};
+  util::hex_value_storage iv_for_data_encryption{
+      random_blob_helper(iv_length_for_data_encryption)};
+
+  util::hex_value_storage dummy_data{};
+  const auto data_encryption_result{encrypt_helper(
+      active_data_cipher_, file_key_data, iv_for_data_encryption, dummy_data)};
+
+  binlog_encryption_record encryption_record{
+      .kek_id = active_kek_id_,
+      .file_key_encrypted_with_kek = file_key_encryption_result.first,
+      .iv_for_file_key_encryption = iv_for_file_key_encryption,
+      .tag_of_file_key_encryption = file_key_encryption_result.second,
+      .data_cipher = active_data_cipher_,
+      .iv_for_data_encryption = iv_for_data_encryption,
+      .tag_of_data_encryption = data_encryption_result.second};
+
+  return encryption_record;
 }
 
 } // namespace binsrv

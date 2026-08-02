@@ -17,12 +17,23 @@
 #define UTIL_HEX_VALUE_FWD_HPP
 
 #include <iosfwd>
+#include <optional>
+
+#include <boost/container/container_fwd.hpp>
 
 #include "util/nv_tuple_json_support.hpp"
 
 namespace util {
 
+// small_vector is expected to have 24 bytes overhead
+inline constexpr std::size_t expected_max_hex_value_length{40U};
+// TODO: in c++26 change to std::inplace_vector
+using hex_value_storage =
+    boost::container::small_vector<std::byte, expected_max_hex_value_length>;
+using optional_hex_value_storage = std::optional<hex_value_storage>;
+
 class hex_value;
+using optional_hex_value = std::optional<hex_value>;
 
 std::ostream &operator<<(std::ostream &output, const hex_value &value);
 

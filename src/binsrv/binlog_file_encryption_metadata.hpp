@@ -13,28 +13,26 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/basic_keyring.hpp"
+#ifndef BINSRV_BINLOG_FILE_ENCRYPTION_METADATA_HPP
+#define BINSRV_BINLOG_FILE_ENCRYPTION_METADATA_HPP
 
-#include <string>
-#include <string_view>
+#include "binsrv/binlog_file_encryption_metadata_fwd.hpp" // IWYU pragma: export
 
-#include "binsrv/keyring_record_fwd.hpp"
+#include "binsrv/file_data_envelope.hpp" // IWYU pragma: export
+#include "binsrv/file_key_envelope.hpp"  // IWYU pragma: export
+
+#include "util/nv_tuple.hpp"
 
 namespace binsrv {
 
-basic_keyring::~basic_keyring() = default;
-
-[[nodiscard]] bool basic_keyring::contains(std::string_view key_id) const {
-  return do_contains(key_id);
-}
-
-[[nodiscard]] const keyring_record &
-basic_keyring::get_key(std::string_view key_id) const {
-  return do_get_key(key_id);
-}
-
-[[nodiscard]] std::string basic_keyring::get_description() const {
-  return do_get_description();
-}
+class [[nodiscard]] binlog_file_encryption_metadata
+    : public util::nv_tuple<
+          // clang-format off
+          util::nv<"file_key_envelope", file_key_envelope>,
+          util::nv<"file_data_envelope", file_data_envelope>
+          // clang-format on
+          > {};
 
 } // namespace binsrv
+
+#endif // BINSRV_BINLOG_FILE_ENCRYPTION_METADATA_HPP

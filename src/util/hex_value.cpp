@@ -36,20 +36,26 @@ namespace util {
 hex_value::hex_value(const_byte_span data)
     : data_{std::begin(data), std::end(data)} {}
 
-hex_value::hex_value(std::string_view value_hex) {
-  if ((std::size(value_hex) % 2U) != 0U) {
-    exception_location().raise<std::invalid_argument>(
-        "invalid hex_value length");
-  }
+hex_value::hex_value(std::string_view value_hex) { assign(value_hex); }
 
-  data_.resize(std::size(value_hex) / 2U);
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-  char *const out_it{reinterpret_cast<char *>(std::data(data_))};
-  try {
-    boost::algorithm::unhex(value_hex, out_it);
-  } catch (const std::exception &) {
+hex_value &hex_value::operator=(const_byte_span data) {
+  assign(data);
+  return *this;
+}
+
+hex_value &hex_value::operator=(std::string_view value_hex) {
+  assign(value_hex);
+  return *this;
+}
+
+void hex_value::assign(const_byte_span data) {
+  data_.assign(std::begin(data), std::end(data));
+}
+
+void hex_value::assign(std::string_view value_hex) {
+  if (!assign_internal(value_hex)) {
     exception_location().raise<std::invalid_argument>(
-        "invalid hex_value characters");
+        "invalid hex_value character sequence");
   }
 }
 
@@ -68,6 +74,22 @@ hex_value::hex_value(std::string_view value_hex) {
   const auto data_sv{util::as_string_view(get_data())};
   boost::algorithm::hex(data_sv, std::begin(result));
   return result;
+}
+
+[[nodiscard]] bool hex_value::assign_internal(std::string_view value_hex) {
+  if ((std::size(value_hex) % 2U) != 0U) {
+    return false;
+  }
+
+  data_.resize(std::size(value_hex) / 2U);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  char *const out_it{reinterpret_cast<char *>(std::data(data_))};
+  try {
+    boost::algorithm::unhex(value_hex, out_it);
+  } catch (const std::exception &) {
+    return false;
+  }
+  return true;
 }
 
 std::ostream &operator<<(std::ostream &output, const hex_value &value) {

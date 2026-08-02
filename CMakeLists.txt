@@ -455,6 +455,9 @@ set(binsrv_source_files
   src/binsrv/binlog_file_metadata.hpp
   src/binsrv/binlog_file_metadata.cpp
 
+  src/binsrv/binlog_file_encryption_metadata_fwd.hpp
+  src/binsrv/binlog_file_encryption_metadata.hpp
+
   src/binsrv/cout_logger.hpp
   src/binsrv/cout_logger.cpp
 
@@ -468,11 +471,17 @@ set(binsrv_source_files
   src/binsrv/exception_handling_helpers.hpp
   src/binsrv/exception_handling_helpers.cpp
 
-  src/binsrv/file_logger.hpp
-  src/binsrv/file_logger.cpp
+  src/binsrv/file_data_envelope_fwd.hpp
+  src/binsrv/file_data_envelope.hpp
+
+  src/binsrv/file_key_envelope_fwd.hpp
+  src/binsrv/file_key_envelope.hpp
 
   src/binsrv/file_keyring.hpp
   src/binsrv/file_keyring.cpp
+
+  src/binsrv/file_logger.hpp
+  src/binsrv/file_logger.cpp
 
   src/binsrv/filesystem_storage_backend.hpp
   src/binsrv/filesystem_storage_backend.cpp

@@ -27,7 +27,6 @@
 #include "binsrv/basic_keyring_fwd.hpp"
 #include "binsrv/basic_storage_backend_fwd.hpp"
 #include "binsrv/encryption_format_type_fwd.hpp"
-#include "binsrv/keyring_record.hpp"
 #include "binsrv/replication_mode_type_fwd.hpp"
 #include "binsrv/storage_config_fwd.hpp"
 
@@ -41,11 +40,23 @@
 #include "util/byte_span_fwd.hpp"
 #include "util/ctime_timestamp_fwd.hpp"
 #include "util/ctime_timestamp_range.hpp"
+#include "util/hex_value.hpp"
 
 namespace binsrv {
 
 class [[nodiscard]] storage {
 private:
+  struct binlog_encryption_record {
+    std::string kek_id;
+    util::hex_value_storage file_key_encrypted_with_kek;
+    util::optional_hex_value_storage iv_for_file_key_encryption;
+    util::optional_hex_value_storage tag_of_file_key_encryption;
+    std::string data_cipher;
+    util::hex_value_storage iv_for_data_encryption;
+    util::optional_hex_value_storage tag_of_data_encryption;
+  };
+  using optional_binlog_encryption_record =
+      std::optional<binlog_encryption_record>;
   struct binlog_record {
     // binlog file name
     events::composite_binlog_name name;
@@ -60,6 +71,8 @@ private:
     // sequence_number of the last transaction seen in this file -
     // used for GTID rewrite-mode resume state persistence
     events::seq_no_t last_sequence_number{0ULL};
+    // optional encryption parameters
+    optional_binlog_encryption_record encryption{};
   };
   using binlog_record_container = std::vector<binlog_record>;
 
@@ -183,7 +196,7 @@ private:
   storage_construction_mode_type construction_mode_;
   basic_keyring_ptr keyring_;
   optional_encryption_format_type encryption_format_;
-  keyring_record active_kek_;
+  std::string active_kek_id_;
   std::string active_data_cipher_{};
   basic_storage_backend_ptr backend_;
 
@@ -266,6 +279,9 @@ private:
   void load_and_validate_binlog_metadata_set(
       const storage_object_name_container &object_names,
       const storage_object_name_container &object_metadata_names);
+
+  [[nodiscard]] optional_binlog_encryption_record
+  generate_binlog_encryption_record() const;
 };
 
 } // namespace binsrv

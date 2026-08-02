@@ -34,12 +34,14 @@ public:
 
   virtual ~basic_keyring();
 
-  [[nodiscard]] const keyring_record &get_key(std::string_view key_id);
+  [[nodiscard]] bool contains(std::string_view key_id) const;
+  [[nodiscard]] const keyring_record &get_key(std::string_view key_id) const;
   [[nodiscard]] std::string get_description() const;
 
 private:
+  [[nodiscard]] virtual bool do_contains(std::string_view key_id) const = 0;
   [[nodiscard]] virtual const keyring_record &
-  do_get_key(std::string_view key_id) = 0;
+  do_get_key(std::string_view key_id) const = 0;
   [[nodiscard]] virtual std::string do_get_description() const = 0;
 };
 

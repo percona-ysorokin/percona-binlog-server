@@ -44,6 +44,8 @@ public:
   explicit keyring_record_collection(std::string_view file_name);
 
   [[nodiscard]] const auto &root() const noexcept { return impl_; }
+
+  [[nodiscard]] bool contains_key(std::string_view key_id) const;
   [[nodiscard]] const keyring_record &get_key(std::string_view key_id) const;
   [[nodiscard]] std::string get_description() const;
 
@@ -51,6 +53,8 @@ private:
   impl_type impl_;
 
   void validate() const;
+  [[nodiscard]] key_collection::const_iterator
+  find_key_internal(std::string_view key_id) const;
 };
 
 } // namespace binsrv

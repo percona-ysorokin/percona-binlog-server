@@ -49,8 +49,9 @@ private:
   std::filesystem::path key_file_path_;
   keyring_record_collection_ptr keyring_records_;
 
+  [[nodiscard]] bool do_contains(std::string_view key_id) const override;
   [[nodiscard]] const keyring_record &
-  do_get_key(std::string_view key_id) override;
+  do_get_key(std::string_view key_id) const override;
   [[nodiscard]] std::string do_get_description() const override;
 };
 

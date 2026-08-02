@@ -30,15 +30,15 @@ namespace util {
 
 class [[nodiscard]] hex_value {
 public:
-  // small_vector is expected to have 24 bytes overhead
-  static constexpr std::size_t inline_capacity{40U};
-  // TODO: in c++26 change to std::inplace_vector
-  using buffer_type =
-      boost::container::small_vector<std::byte, inline_capacity>;
-
   hex_value() = default;
   explicit hex_value(const_byte_span data);
   explicit hex_value(std::string_view value_hex);
+
+  hex_value &operator=(const_byte_span data);
+  hex_value &operator=(std::string_view value_hex);
+
+  void assign(const_byte_span data);
+  void assign(std::string_view value_hex);
 
   [[nodiscard]] static bool try_parse(std::string_view value_sv,
                                       hex_value &value) noexcept;
@@ -57,7 +57,9 @@ public:
   friend bool operator==(const hex_value &, const hex_value &) = default;
 
 private:
-  buffer_type data_;
+  hex_value_storage data_;
+
+  [[nodiscard]] bool assign_internal(std::string_view value_hex);
 };
 
 } // namespace util

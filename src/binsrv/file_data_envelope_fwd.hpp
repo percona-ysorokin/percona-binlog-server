@@ -13,28 +13,13 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#include "binsrv/basic_keyring.hpp"
-
-#include <string>
-#include <string_view>
-
-#include "binsrv/keyring_record_fwd.hpp"
+#ifndef BINSRV_FILE_DATA_ENVELOPE_FWD_HPP
+#define BINSRV_FILE_DATA_ENVELOPE_FWD_HPP
 
 namespace binsrv {
 
-basic_keyring::~basic_keyring() = default;
-
-[[nodiscard]] bool basic_keyring::contains(std::string_view key_id) const {
-  return do_contains(key_id);
-}
-
-[[nodiscard]] const keyring_record &
-basic_keyring::get_key(std::string_view key_id) const {
-  return do_get_key(key_id);
-}
-
-[[nodiscard]] std::string basic_keyring::get_description() const {
-  return do_get_description();
-}
+class file_data_envelope;
 
 } // namespace binsrv
+
+#endif // BINSRV_FILE_DATA_ENVELOPE_FWD_HPP
