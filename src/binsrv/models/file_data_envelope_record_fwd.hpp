@@ -13,17 +13,13 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef BINSRV_BINLOG_FILE_ENCRYPTION_METADATA_FWD_HPP
-#define BINSRV_BINLOG_FILE_ENCRYPTION_METADATA_FWD_HPP
+#ifndef BINSRV_MODELS_FILE_DATA_ENVELOPE_RECORD_FWD_HPP
+#define BINSRV_MODELS_FILE_DATA_ENVELOPE_RECORD_FWD_HPP
 
-#include <optional>
+namespace binsrv::models {
 
-namespace binsrv {
+struct file_data_envelope_record;
 
-class binlog_file_encryption_metadata;
-using optional_binlog_file_encryption_metadata =
-    std::optional<binlog_file_encryption_metadata>;
+} // namespace binsrv::models
 
-} // namespace binsrv
-
-#endif // BINSRV_BINLOG_FILE_ENCRYPTION_METADATA_FWD_HPP
+#endif // BINSRV_MODELS_FILE_DATA_ENVELOPE_RECORD_FWD_HPP

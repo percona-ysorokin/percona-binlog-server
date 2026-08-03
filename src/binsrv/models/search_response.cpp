@@ -15,7 +15,6 @@
 
 #include "binsrv/models/search_response.hpp"
 
-#include <cstdint>
 #include <ctime>
 #include <string>
 #include <string_view>
@@ -23,8 +22,6 @@
 
 #include <boost/json/serialize.hpp>
 #include <boost/json/value.hpp>
-
-#include "binsrv/gtids/gtid_set.hpp"
 
 #include "binsrv/models/binlog_file_record.hpp"
 #include "binsrv/models/response_status_type.hpp"
@@ -60,19 +57,7 @@ search_response::~search_response() = default;
   return boost::json::serialize(json_value);
 }
 
-void search_response::add_record(std::string_view name, std::uint64_t size,
-                                 std::string_view uri,
-                                 gtids::optional_gtid_set previous_gtids,
-                                 gtids::optional_gtid_set added_gtids,
-                                 std::time_t min_timestamp,
-                                 std::time_t max_timestamp) {
-  binlog_file_record record{{{std::string{name}},
-                             {size},
-                             {std::string{uri}},
-                             {std::move(previous_gtids)},
-                             {std::move(added_gtids)},
-                             {util::ctime_timestamp{min_timestamp}},
-                             {util::ctime_timestamp{max_timestamp}}}};
+void search_response::add_record(binlog_file_record record) {
   impl_.template get<"result">().emplace_back(std::move(record));
 }
 

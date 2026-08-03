@@ -13,20 +13,20 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef BINSRV_FILE_DATA_ENVELOPE_HPP
-#define BINSRV_FILE_DATA_ENVELOPE_HPP
+#ifndef BINSRV_MODELS_FILE_DATA_ENVELOPE_RECORD_HPP
+#define BINSRV_MODELS_FILE_DATA_ENVELOPE_RECORD_HPP
 
-#include "binsrv/file_data_envelope_fwd.hpp" // IWYU pragma: export
+#include "binsrv/models/file_data_envelope_record_fwd.hpp" // IWYU pragma: export
 
 #include <string>
 
 #include "util/hex_value.hpp"
 #include "util/nv_tuple.hpp"
 
-namespace binsrv {
+namespace binsrv::models {
 
-class [[nodiscard]] file_data_envelope
-    : public util::nv_tuple<
+struct [[nodiscard]] file_data_envelope_record
+    : util::nv_tuple<
           // clang-format off
           util::nv<"cipher", std::string>,
           util::nv<"iv_hex", util::hex_value>,
@@ -34,6 +34,6 @@ class [[nodiscard]] file_data_envelope
           // clang-format on
           > {};
 
-} // namespace binsrv
+} // namespace binsrv::models
 
-#endif // BINSRV_FILE_DATA_ENVELOPE_HPP
+#endif // BINSRV_MODELS_FILE_DATA_ENVELOPE_RECORD_HPP

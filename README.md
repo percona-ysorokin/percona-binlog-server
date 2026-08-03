@@ -205,7 +205,19 @@ may print
       "min_timestamp": "2026-02-09T17:22:01",
       "max_timestamp": "2026-02-09T17:22:08",
       "previous_gtids": "",
-      "added_gtids": "11111111-aaaa-1111-aaaa-111111111111:1-123456"
+      "added_gtids": "11111111-aaaa-1111-aaaa-111111111111:1-123456",
+      "encryption": {
+        "file_key_envelope": {
+          "kek_id": "beta",
+          "data_hex": "A4F6F06C40C44538BB9DE0A468D1708A",
+          "iv_hex": "52A9AF1A96B5ACB05F6FD720",
+          "tag_hex": "000102030405060708090A0B0C0D0E0F"
+        },
+        "file_data_envelope": {
+          "cipher": "AES-128-CTR",
+          "iv_hex": "4515D10B1607C71C6CA883B052A9AF1A"
+        }
+      }
     },
     {
       "name": "binlog.000002",
@@ -214,7 +226,19 @@ may print
       "min_timestamp": "2026-02-09T17:22:08",
       "max_timestamp": "2026-02-09T17:22:09",
       "previous_gtids": "11111111-aaaa-1111-aaaa-111111111111:1-123456",
-      "added_gtids": "11111111-aaaa-1111-aaaa-111111111111:123457-246912"
+      "added_gtids": "11111111-aaaa-1111-aaaa-111111111111:123457-246912",
+      "encryption": {
+        "file_key_envelope": {
+          "kek_id": "beta",
+          "data_hex": "BB9DE0A468D1708AA4F6F06C40C44538",
+          "iv_hex": "ACB05F6FD72052A9AF1A96B5",
+          "tag_hex": "000102030405060708090A0B0C0D0E0F"
+        },
+        "file_data_envelope": {
+          "cipher": "AES-128-CTR",
+          "iv_hex": "6CA883B052A9AF1A4515D10B1607C71C"
+        }
+      }
     }
   ]
 }

@@ -13,13 +13,13 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef BINSRV_FILE_DATA_ENVELOPE_FWD_HPP
-#define BINSRV_FILE_DATA_ENVELOPE_FWD_HPP
+#ifndef BINSRV_MODELS_FILE_KEY_ENVELOPE_RECORD_FWD_HPP
+#define BINSRV_MODELS_FILE_KEY_ENVELOPE_RECORD_FWD_HPP
 
-namespace binsrv {
+namespace binsrv::models {
 
-class file_data_envelope;
+struct file_key_envelope_record;
 
-} // namespace binsrv
+} // namespace binsrv::models
 
-#endif // BINSRV_FILE_DATA_ENVELOPE_FWD_HPP
+#endif // BINSRV_MODELS_FILE_KEY_ENVELOPE_RECORD_FWD_HPP

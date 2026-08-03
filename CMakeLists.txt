@@ -404,9 +404,18 @@ set(models_source_files
   src/binsrv/models/binlog_file_record_fwd.hpp
   src/binsrv/models/binlog_file_record.hpp
 
+  src/binsrv/models/binlog_file_encryption_record_fwd.hpp
+  src/binsrv/models/binlog_file_encryption_record.hpp
+
   src/binsrv/models/error_response_fwd.hpp
   src/binsrv/models/error_response.hpp
   src/binsrv/models/error_response.cpp
+
+  src/binsrv/models/file_data_envelope_record_fwd.hpp
+  src/binsrv/models/file_data_envelope_record.hpp
+
+  src/binsrv/models/file_key_envelope_record_fwd.hpp
+  src/binsrv/models/file_key_envelope_record.hpp
 
   src/binsrv/models/response_status_type_fwd.hpp
   src/binsrv/models/response_status_type.hpp
@@ -455,9 +464,6 @@ set(binsrv_source_files
   src/binsrv/binlog_file_metadata.hpp
   src/binsrv/binlog_file_metadata.cpp
 
-  src/binsrv/binlog_file_encryption_metadata_fwd.hpp
-  src/binsrv/binlog_file_encryption_metadata.hpp
-
   src/binsrv/cout_logger.hpp
   src/binsrv/cout_logger.cpp
 
@@ -470,12 +476,6 @@ set(binsrv_source_files
 
   src/binsrv/exception_handling_helpers.hpp
   src/binsrv/exception_handling_helpers.cpp
-
-  src/binsrv/file_data_envelope_fwd.hpp
-  src/binsrv/file_data_envelope.hpp
-
-  src/binsrv/file_key_envelope_fwd.hpp
-  src/binsrv/file_key_envelope.hpp
 
   src/binsrv/file_keyring.hpp
   src/binsrv/file_keyring.cpp

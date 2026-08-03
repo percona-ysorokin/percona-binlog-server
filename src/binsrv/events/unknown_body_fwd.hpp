@@ -25,4 +25,4 @@ std::ostream &operator<<(std::ostream &output, const unknown_body &obj);
 
 } // namespace binsrv::events
 
-#endif // BINSRV_EVENTS_UNKNOWN_BODY_FWD_HPPß
+#endif // BINSRV_EVENTS_UNKNOWN_BODY_FWD_HPP

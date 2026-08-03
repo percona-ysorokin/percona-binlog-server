@@ -52,12 +52,73 @@
 #include "binsrv/gtids/gtid.hpp"
 #include "binsrv/gtids/gtid_set.hpp"
 
+#include "binsrv/models/binlog_file_encryption_record.hpp"
+
 #include "util/byte_span.hpp"
 #include "util/conversion_helpers.hpp"
 #include "util/ctime_timestamp.hpp"
 #include "util/exception_location_helpers.hpp"
 
 namespace binsrv {
+
+[[nodiscard]] models::binlog_file_encryption_record
+storage::binlog_encryption_record::to_model(
+    const storage::binlog_encryption_record &record) {
+  models::binlog_file_encryption_record model{};
+
+  auto &file_key_envelope{model.get<"file_key_envelope">()};
+  file_key_envelope.get<"kek_id">() = record.kek_id;
+  file_key_envelope.get<"data_hex">() = record.file_key_encrypted_with_kek;
+  if (record.iv_for_file_key_encryption.has_value()) {
+    file_key_envelope.get<"iv_hex">() = *record.iv_for_file_key_encryption;
+  }
+  if (record.tag_of_file_key_encryption.has_value()) {
+    file_key_envelope.get<"tag_hex">() = *record.tag_of_file_key_encryption;
+  }
+
+  auto &file_data_envelope{model.get<"file_data_envelope">()};
+  file_data_envelope.get<"cipher">() = record.data_cipher;
+  file_data_envelope.get<"iv_hex">() = record.iv_for_data_encryption;
+  if (record.tag_of_data_encryption.has_value()) {
+    file_data_envelope.get<"tag_hex">() = *record.tag_of_data_encryption;
+  }
+  return model;
+}
+
+[[nodiscard]] storage::binlog_encryption_record
+storage::binlog_encryption_record::from_model(
+    const models::binlog_file_encryption_record &model) {
+  binlog_encryption_record record{};
+
+  const auto &file_key_envelope{model.get<"file_key_envelope">()};
+  record.kek_id = file_key_envelope.get<"kek_id">();
+  const auto file_key_raw{file_key_envelope.get<"data_hex">().get_data()};
+  record.file_key_encrypted_with_kek.assign(std::cbegin(file_key_raw),
+                                            std::cend(file_key_raw));
+  if (file_key_envelope.get<"iv_hex">().has_value()) {
+    const auto file_key_iv_raw{file_key_envelope.get<"iv_hex">()->get_data()};
+    record.iv_for_file_key_encryption.emplace(std::cbegin(file_key_iv_raw),
+                                              std::cend(file_key_iv_raw));
+  }
+  if (file_key_envelope.get<"tag_hex">().has_value()) {
+    const auto file_key_tag_raw{file_key_envelope.get<"tag_hex">()->get_data()};
+    record.tag_of_file_key_encryption.emplace(std::cbegin(file_key_tag_raw),
+                                              std::cend(file_key_tag_raw));
+  }
+
+  const auto &file_data_envelope{model.get<"file_data_envelope">()};
+  record.data_cipher = file_data_envelope.get<"cipher">();
+  const auto file_data_iv_raw{file_data_envelope.get<"iv_hex">().get_data()};
+  record.iv_for_data_encryption.assign(std::cbegin(file_data_iv_raw),
+                                       std::cend(file_data_iv_raw));
+  if (file_data_envelope.get<"tag_hex">().has_value()) {
+    const auto file_data_tag_raw{
+        file_data_envelope.get<"tag_hex">()->get_data()};
+    record.tag_of_data_encryption.emplace(std::cbegin(file_data_tag_raw),
+                                          std::cend(file_data_tag_raw));
+  }
+  return record;
+}
 
 storage::storage(const storage_config &config,
                  storage_construction_mode_type construction_mode,
@@ -662,48 +723,7 @@ void storage::save_metadata() const {
       backend_->get_object(generate_binlog_metadata_name(binlog_name))};
   binlog_file_metadata metadata{content};
 
-  const auto encryption_info_extractor{
-      [](const optional_binlog_file_encryption_metadata &encryption_metadata)
-          -> optional_binlog_encryption_record {
-        if (!encryption_metadata.has_value()) {
-          return std::nullopt;
-        }
-        binlog_encryption_record encryption_record{};
-
-        const auto &file_key_envelope{
-            encryption_metadata->get<"file_key_envelope">()};
-        encryption_record.kek_id = file_key_envelope.get<"kek_id">();
-        const auto file_key_raw{file_key_envelope.get<"data_hex">().get_data()};
-        encryption_record.file_key_encrypted_with_kek.assign(
-            std::cbegin(file_key_raw), std::cend(file_key_raw));
-        if (file_key_envelope.get<"iv_hex">().has_value()) {
-          const auto file_key_iv_raw{
-              file_key_envelope.get<"iv_hex">()->get_data()};
-          encryption_record.iv_for_file_key_encryption.emplace(
-              std::cbegin(file_key_iv_raw), std::cend(file_key_iv_raw));
-        }
-        if (file_key_envelope.get<"tag_hex">().has_value()) {
-          const auto file_key_tag_raw{
-              file_key_envelope.get<"tag_hex">()->get_data()};
-          encryption_record.tag_of_file_key_encryption.emplace(
-              std::cbegin(file_key_tag_raw), std::cend(file_key_tag_raw));
-        }
-
-        const auto &file_data_envelope{
-            encryption_metadata->get<"file_data_envelope">()};
-        encryption_record.data_cipher = file_data_envelope.get<"cipher">();
-        const auto file_data_iv_raw{
-            file_data_envelope.get<"iv_hex">().get_data()};
-        encryption_record.iv_for_data_encryption.assign(
-            std::cbegin(file_data_iv_raw), std::cend(file_data_iv_raw));
-        if (file_data_envelope.get<"tag_hex">().has_value()) {
-          const auto file_data_tag_raw{
-              file_data_envelope.get<"tag_hex">()->get_data()};
-          encryption_record.tag_of_data_encryption.emplace(
-              std::cbegin(file_data_tag_raw), std::cend(file_data_tag_raw));
-        }
-        return encryption_record;
-      }};
+  const auto &optional_encryption_metadata{metadata.root().get<"encryption">()};
   return binlog_record{
       .name = binlog_name,
       .size = metadata.root().get<"size">(),
@@ -712,8 +732,10 @@ void storage::save_metadata() const {
       .timestamps = {metadata.root().get<"min_timestamp">(),
                      metadata.root().get<"max_timestamp">()},
       .last_sequence_number = metadata.root().get<"last_sequence_number">(),
-      .encryption =
-          encryption_info_extractor(metadata.root().get<"encryption">())};
+      .encryption = optional_encryption_metadata.has_value()
+                        ? binlog_encryption_record::from_model(
+                              *optional_encryption_metadata)
+                        : optional_binlog_encryption_record{}};
 }
 
 void storage::validate_binlog_metadata(const binlog_record &record) const {
@@ -756,31 +778,8 @@ void storage::save_binlog_metadata(const binlog_record &record) const {
   metadata.root().get<"last_sequence_number">() = record.last_sequence_number;
   const auto &record_encryption{record.encryption};
   if (record_encryption.has_value()) {
-    binlog_file_encryption_metadata encryption_metadata{};
-
-    auto &file_key_envelope{encryption_metadata.get<"file_key_envelope">()};
-    file_key_envelope.get<"kek_id">() = record_encryption->kek_id;
-    file_key_envelope.get<"data_hex">() =
-        record_encryption->file_key_encrypted_with_kek;
-    if (record_encryption->iv_for_file_key_encryption.has_value()) {
-      file_key_envelope.get<"iv_hex">() =
-          *record_encryption->iv_for_file_key_encryption;
-    }
-    if (record_encryption->tag_of_file_key_encryption.has_value()) {
-      file_key_envelope.get<"tag_hex">() =
-          *record_encryption->tag_of_file_key_encryption;
-    }
-
-    auto &file_data_envelope{encryption_metadata.get<"file_data_envelope">()};
-    file_data_envelope.get<"cipher">() = record_encryption->data_cipher;
-    file_data_envelope.get<"iv_hex">() =
-        record_encryption->iv_for_data_encryption;
-    if (record_encryption->tag_of_data_encryption.has_value()) {
-      file_data_envelope.get<"tag_hex">() =
-          *record_encryption->tag_of_data_encryption;
-    }
-
-    metadata.root().get<"encryption">() = std::move(encryption_metadata);
+    metadata.root().get<"encryption">() =
+        binlog_encryption_record::to_model(*record_encryption);
   }
   const auto content{metadata.str()};
   backend_->put_object(generate_binlog_metadata_name(record.name),

@@ -13,26 +13,26 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef BINSRV_BINLOG_FILE_ENCRYPTION_METADATA_HPP
-#define BINSRV_BINLOG_FILE_ENCRYPTION_METADATA_HPP
+#ifndef BINSRV_MODELS_BINLOG_FILE_ENCRYPTION_RECORD_HPP
+#define BINSRV_MODELS_BINLOG_FILE_ENCRYPTION_RECORD_HPP
 
-#include "binsrv/binlog_file_encryption_metadata_fwd.hpp" // IWYU pragma: export
+#include "binsrv/models/binlog_file_encryption_record_fwd.hpp" // IWYU pragma: export
 
-#include "binsrv/file_data_envelope.hpp" // IWYU pragma: export
-#include "binsrv/file_key_envelope.hpp"  // IWYU pragma: export
+#include "binsrv/models/file_data_envelope_record.hpp" // IWYU pragma: export
+#include "binsrv/models/file_key_envelope_record.hpp"  // IWYU pragma: export
 
 #include "util/nv_tuple.hpp"
 
-namespace binsrv {
+namespace binsrv::models {
 
-class [[nodiscard]] binlog_file_encryption_metadata
+class [[nodiscard]] binlog_file_encryption_record
     : public util::nv_tuple<
           // clang-format off
-          util::nv<"file_key_envelope", file_key_envelope>,
-          util::nv<"file_data_envelope", file_data_envelope>
+          util::nv<"file_key_envelope", file_key_envelope_record>,
+          util::nv<"file_data_envelope", file_data_envelope_record>
           // clang-format on
           > {};
 
-} // namespace binsrv
+} // namespace binsrv::models
 
-#endif // BINSRV_BINLOG_FILE_ENCRYPTION_METADATA_HPP
+#endif // BINSRV_MODELS_BINLOG_FILE_ENCRYPTION_RECORD_HPP

@@ -57,6 +57,7 @@
 #include "binsrv/gtids/common_types.hpp"
 #include "binsrv/gtids/gtid_set.hpp"
 
+#include "binsrv/models/binlog_file_record.hpp"
 #include "binsrv/models/error_response.hpp"
 #include "binsrv/models/response_status_type.hpp"
 #include "binsrv/models/search_response.hpp"
@@ -995,12 +996,21 @@ bool handle_version() {
 // a record of the response model
 void append_record_to_response(binsrv::models::search_response &response,
                                const binsrv::storage &storage,
-                               const auto &record) {
-  response.add_record(record.name.str(), record.size,
-                      storage.get_binlog_uri(record.name),
-                      record.previous_gtids, record.added_gtids,
-                      record.timestamps.get_min_timestamp().get_value(),
-                      record.timestamps.get_max_timestamp().get_value());
+                               const binsrv::storage::binlog_record &record) {
+  binsrv::models::binlog_file_record model_record{
+      {{record.name.str()},
+       {record.size},
+       {storage.get_binlog_uri(record.name)},
+       {record.previous_gtids},
+       {record.added_gtids},
+       {record.timestamps.get_min_timestamp()},
+       {record.timestamps.get_max_timestamp()},
+       {record.encryption.has_value()
+            ? binsrv::storage::binlog_encryption_record::to_model(
+                  *record.encryption)
+            : binsrv::models::optional_binlog_file_encryption_record{}}}};
+
+  response.add_record(std::move(model_record));
 }
 
 bool handle_list(std::string_view config_file_path) {

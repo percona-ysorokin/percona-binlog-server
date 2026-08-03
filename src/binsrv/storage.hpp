@@ -35,6 +35,8 @@
 #include "binsrv/gtids/gtid_fwd.hpp"
 #include "binsrv/gtids/gtid_set.hpp"
 
+#include "binsrv/models/binlog_file_encryption_record_fwd.hpp"
+
 #include "binsrv/events/common_types.hpp"
 
 #include "util/byte_span_fwd.hpp"
@@ -45,7 +47,7 @@
 namespace binsrv {
 
 class [[nodiscard]] storage {
-private:
+public:
   struct binlog_encryption_record {
     std::string kek_id;
     util::hex_value_storage file_key_encrypted_with_kek;
@@ -54,6 +56,11 @@ private:
     std::string data_cipher;
     util::hex_value_storage iv_for_data_encryption;
     util::optional_hex_value_storage tag_of_data_encryption;
+
+    [[nodiscard]] static models::binlog_file_encryption_record
+    to_model(const binlog_encryption_record &record);
+    [[nodiscard]] static binlog_encryption_record
+    from_model(const models::binlog_file_encryption_record &model);
   };
   using optional_binlog_encryption_record =
       std::optional<binlog_encryption_record>;
@@ -76,7 +83,6 @@ private:
   };
   using binlog_record_container = std::vector<binlog_record>;
 
-public:
   static constexpr std::string_view default_binlog_index_name{"binlog.index"};
   static constexpr std::string_view default_binlog_index_entry_path{"."};
   static constexpr std::string_view metadata_name{"metadata.json"};

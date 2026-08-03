@@ -23,6 +23,8 @@
 
 #include "binsrv/gtids/gtid_set.hpp"
 
+#include "binsrv/models/binlog_file_encryption_record.hpp" // IWYU pragma: export
+
 #include "util/ctime_timestamp.hpp"
 #include "util/nv_tuple.hpp"
 
@@ -37,7 +39,8 @@ struct [[nodiscard]] binlog_file_record
           util::nv<"previous_gtids", gtids::optional_gtid_set>,
           util::nv<"added_gtids", gtids::optional_gtid_set>,
           util::nv<"min_timestamp", util::ctime_timestamp>,
-          util::nv<"max_timestamp", util::ctime_timestamp>
+          util::nv<"max_timestamp", util::ctime_timestamp>,
+          util::nv<"encryption", optional_binlog_file_encryption_record>
           // clang-format on
           > {};
 

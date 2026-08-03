@@ -22,11 +22,11 @@
 #include <string>
 #include <string_view>
 
-#include "binsrv/binlog_file_encryption_metadata.hpp" // IWYU pragma: export
-
 #include "binsrv/events/common_types.hpp"
 
 #include "binsrv/gtids/gtid_set.hpp"
+
+#include "binsrv/models/binlog_file_encryption_record.hpp" // IWYU pragma: export
 
 #include "util/ctime_timestamp.hpp"
 #include "util/nv_tuple.hpp"
@@ -50,7 +50,7 @@ private:
       util::nv<"min_timestamp", util::ctime_timestamp>,
       util::nv<"max_timestamp", util::ctime_timestamp>,
       util::nv<"last_sequence_number", events::seq_no_t>,
-      util::nv<"encryption", optional_binlog_file_encryption_metadata>
+      util::nv<"encryption", models::optional_binlog_file_encryption_record>
       // clang-format on
       >;
 
