@@ -167,6 +167,33 @@ set_target_properties(lib_util PROPERTIES
 )
 add_library(binsrv::lib_util ALIAS lib_util)
 
+# OpenSSL++ files
+set(opensslpp_source_files
+  src/opensslpp/cipher_context_fwd.hpp
+  src/opensslpp/cipher_context.hpp
+  src/opensslpp/cipher_context.cpp
+
+  src/opensslpp/crypto_rng.hpp
+  src/opensslpp/crypto_rng.cpp
+
+  src/opensslpp/core_error_fwd.hpp
+  src/opensslpp/core_error.hpp
+  src/opensslpp/core_error.cpp
+)
+add_library(lib_opensslpp STATIC ${opensslpp_source_files})
+target_link_libraries(lib_opensslpp
+  PRIVATE
+    binlog_server_compiler_flags
+    OpenSSL::Crypto
+)
+# it is not possible to propagate CXX_EXTENSIONS and CXX_STANDARD_REQUIRED
+# via interface library (binlog_server_compiler_flags)
+set_target_properties(lib_opensslpp PROPERTIES
+  CXX_STANDARD_REQUIRED YES
+  CXX_EXTENSIONS NO
+)
+add_library(binsrv::lib_opensslpp ALIAS lib_opensslpp)
+
 # mysql wrapper library files
 set(easymysql_source_files
   src/easymysql/core_error_helpers_private.hpp

@@ -95,6 +95,32 @@ set_target_properties(event_test PROPERTIES
   CXX_EXTENSIONS NO
 )
 
+add_executable(cipher_context_test cipher_context_test.cpp)
+target_include_directories(cipher_context_test PRIVATE "${PROJECT_SOURCE_DIR}/src")
+target_link_libraries(cipher_context_test
+  PRIVATE
+    binlog_server_compiler_flags
+    binsrv::lib_opensslpp
+    Boost::unit_test_framework
+)
+set_target_properties(cipher_context_test PROPERTIES
+  CXX_STANDARD_REQUIRED YES
+  CXX_EXTENSIONS NO
+)
+
+add_executable(crypto_rnd_test crypto_rnd_test.cpp)
+target_include_directories(crypto_rnd_test PRIVATE "${PROJECT_SOURCE_DIR}/src")
+target_link_libraries(crypto_rnd_test
+  PRIVATE
+    binlog_server_compiler_flags
+    binsrv::lib_opensslpp
+    Boost::unit_test_framework
+)
+set_target_properties(crypto_rnd_test PROPERTIES
+  CXX_STANDARD_REQUIRED YES
+  CXX_EXTENSIONS NO
+)
+
 
 set(test_run_options --no_color_output)
 add_test(NAME byte_span_encoding_test COMMAND byte_span_encoding_test ${test_run_options})
@@ -103,3 +129,5 @@ add_test(NAME tag_test COMMAND tag_test ${test_run_options})
 add_test(NAME gtid_test COMMAND gtid_test ${test_run_options})
 add_test(NAME gtid_set_test COMMAND gtid_set_test ${test_run_options})
 add_test(NAME event_test COMMAND event_test ${test_run_options})
+add_test(NAME cipher_context_test COMMAND cipher_context_test ${test_run_options})
+add_test(NAME crypto_rnd_test COMMAND crypto_rnd_test ${test_run_options})
