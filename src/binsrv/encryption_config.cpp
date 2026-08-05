@@ -28,6 +28,8 @@ void encryption_config::validate() const {
     util::exception_location().raise<std::invalid_argument>(
         "error validating storage encryption config: unsupported format");
   }
+  // TODO: make sure that data encryption cipher is supported by OpenSSL
+  //       and has CTR mode
 }
 
 } // namespace binsrv

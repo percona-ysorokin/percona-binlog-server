@@ -288,6 +288,11 @@ private:
 
   [[nodiscard]] optional_binlog_encryption_record
   generate_binlog_encryption_record() const;
+
+  void write_data_to_stream(
+      util::const_byte_span data,
+      const optional_binlog_encryption_record &encryption_record,
+      std::uint64_t offset);
 };
 
 } // namespace binsrv

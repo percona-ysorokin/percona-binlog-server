@@ -184,7 +184,7 @@ add_library(lib_opensslpp STATIC ${opensslpp_source_files})
 target_link_libraries(lib_opensslpp
   PRIVATE
     binlog_server_compiler_flags
-    OpenSSL::Crypto
+    Boost::headers OpenSSL::Crypto
 )
 # it is not possible to propagate CXX_EXTENSIONS and CXX_STANDARD_REQUIRED
 # via interface library (binlog_server_compiler_flags)
@@ -594,6 +594,7 @@ target_link_libraries(binlog_server
     binsrv::lib_gtids
     binsrv::lib_events
     binsrv::lib_models
+    binsrv::lib_opensslpp
     Boost::headers Boost::json Boost::url
     aws-cpp-sdk-s3-crt
 )

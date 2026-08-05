@@ -24,15 +24,12 @@
 #include <filesystem>
 #include <iterator>
 #include <optional>
-#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
-
-#include <boost/algorithm/string/case_conv.hpp>
 
 #include "binsrv/basic_keyring.hpp"
 #include "binsrv/basic_storage_backend.hpp"
@@ -54,8 +51,10 @@
 
 #include "binsrv/models/binlog_file_encryption_record.hpp"
 
+#include "opensslpp/cipher_context.hpp"
+#include "opensslpp/crypto_rng.hpp"
+
 #include "util/byte_span.hpp"
-#include "util/conversion_helpers.hpp"
 #include "util/ctime_timestamp.hpp"
 #include "util/exception_location_helpers.hpp"
 
@@ -147,8 +146,12 @@ storage::storage(const storage_config &config,
       util::exception_location().raise<std::runtime_error>(
           "keyring does not contain the specified KEK ID");
     }
-    // TODO: validate that the length of the KEK in the keyring record match
-    //       the length specified in the cipher name
+    // TODO: make sure that random file keys (of length that corresponds to the
+    //       active data cipher) can be encrypted with the active KEK -
+    //       for instance, if active data cipher is AES-192-CRT (key length 24
+    //       bytes), then the active KEK cannot be of ECB or CBC mode as these
+    //       ciphers can only encrypt data of length that is a multiple of the
+    //       block size (16 bytes)
     active_kek_id_ = kek_id;
     active_data_cipher_ = encryption_config->get<"cipher">();
   }
@@ -529,9 +532,11 @@ void storage::update_last_checkpoint_info() {
 
 [[nodiscard]] open_binlog_status storage::open_new_binlog_file_internal(
     const events::composite_binlog_name &binlog_name) {
+
+  auto encryption_record{generate_binlog_encryption_record()};
   // writing the magic binlog footprint only if this is a newly
   // created file
-  backend_->write_data_to_stream(events::magic_binlog_payload);
+  write_data_to_stream(events::magic_binlog_payload, encryption_record, 0ULL);
 
   gtids::optional_gtid_set previous_binlog_gtids{};
   gtids::optional_gtid_set added_binlog_gtids{};
@@ -544,7 +549,7 @@ void storage::update_last_checkpoint_info() {
       binlog_name, events::magic_binlog_offset,
       std::move(previous_binlog_gtids), std::move(added_binlog_gtids),
       util::ctime_timestamp_range{}, events::seq_no_t{},
-      generate_binlog_encryption_record());
+      std::move(encryption_record));
   save_binlog_metadata(get_current_binlog_record());
   save_binlog_index();
   return open_binlog_status::created;
@@ -558,7 +563,9 @@ storage::open_existing_binlog_file_internal(std::uint64_t open_stream_offset) {
                : open_binlog_status::opened_with_data_present;
   }
   assert(open_stream_offset == 0ULL);
-  backend_->write_data_to_stream(events::magic_binlog_payload);
+
+  write_data_to_stream(events::magic_binlog_payload,
+                       get_current_binlog_record().encryption, 0ULL);
   get_current_binlog_record().size = events::magic_binlog_offset;
   return open_binlog_status::opened_empty;
 }
@@ -573,7 +580,9 @@ void storage::flush_event_buffer_internal() {
       last_transaction_boundary_position_in_event_buffer_};
   // writing <last_transaction_boundary_position_in_event_buffer_> bytes from
   // the beginning of the event buffer
-  backend_->write_data_to_stream(transactions_data);
+  write_data_to_stream(transactions_data,
+                       get_current_binlog_record().encryption,
+                       get_current_binlog_record().size);
   get_current_binlog_record().size +=
       last_transaction_boundary_position_in_event_buffer_;
   if (is_in_gtid_replication_mode()) {
@@ -851,145 +860,149 @@ storage::generate_binlog_encryption_record() const {
     return std::nullopt;
   }
 
+  // we identify the KEK record in the keyring by the active KEK ID,
+  // specified in the main configuration file
+  // ('<storage.encryption.kek_id>' parameter)
   const auto &keyring_record{keyring_->get_key(active_kek_id_)};
+
+  // identifying the the cipher name and the key data from the
+  // keyring record - this data will be used to encrypt random file
+  // keys generated for new binlog data files
   const auto &kek_cipher{keyring_record.get<"cipher">()};
-  const auto &kek_data{keyring_record.get<"data_hex">().get_data()};
+  const auto &kek{keyring_record.get<"data_hex">().get_data()};
 
-  // identify initialization vector length based on the cipher
-  // TODO: rework with proper OpenSSL "EVP_CIPHER_iv_length()" call
-  const auto iv_length_helper{[](const std::string &cipher) -> std::size_t {
-    const auto normalized_cipher{boost::algorithm::to_upper_copy(cipher)};
-
-    static constexpr std::size_t no_iv_length{0U};
-    static constexpr std::size_t generic_iv_length{16U};
-    static constexpr std::size_t gcm_iv_length{12U};
-    if (normalized_cipher.ends_with("-ECB")) {
-      return no_iv_length;
-    }
-    if (normalized_cipher.ends_with("-GCM")) {
-      return gcm_iv_length;
-    }
-    if (normalized_cipher.ends_with("-CBC") ||
-        normalized_cipher.ends_with("-CTR")) {
-      return generic_iv_length;
-    }
-    util::exception_location().raise<std::logic_error>(
-        "unsupported cipher mode: " + cipher);
-  }};
-
-  // identify the length of the key based on the cipher
-  // TODO: rework with proper OpenSSL "EVP_CIPHER_key_length()" call
-  const auto key_length_helper{[](const std::string &cipher) -> std::size_t {
-    static constexpr std::size_t x_128_key_length{16U};
-    static constexpr std::size_t x_192_key_length{24U};
-    static constexpr std::size_t x_256_key_length{32U};
-    if (cipher.find("-128-") != std::string::npos) {
-      return x_128_key_length;
-    }
-    if (cipher.find("-192-") != std::string::npos) {
-      return x_192_key_length;
-    }
-    if (cipher.find("-256-") != std::string::npos) {
-      return x_256_key_length;
-    }
-    util::exception_location().raise<std::logic_error>(
-        "unsupported cipher length: " + cipher);
-  }};
-  // identify the length of the tag based on the cipher
-  // TODO: rework with proper OpenSSL call
-  const auto tag_length_helper{[](const std::string &cipher) -> std::size_t {
-    const auto normalized_cipher{boost::algorithm::to_upper_copy(cipher)};
-    static constexpr std::size_t no_tag_length{0U};
-    static constexpr std::size_t gcm_tag_length{16U};
-
-    if (normalized_cipher.ends_with("-GCM")) {
-      return gcm_tag_length;
-    }
-    if (normalized_cipher.ends_with("-ECB") ||
-        normalized_cipher.ends_with("-CBC") ||
-        normalized_cipher.ends_with("-CTR")) {
-      return no_tag_length;
-    }
-    util::exception_location().raise<std::logic_error>(
-        "unsupported cipher mode: " + cipher);
-  }};
-
-  // generating a random blob
-  // TODO: rework with proper OpenSSL RAND_bytes() call
-  const auto random_blob_helper{
-      [](std::size_t length) -> util::hex_value_storage {
-        static std::random_device rd_instance;
-        util::hex_value_storage result(length);
-        std::ranges::generate(result, []() {
-          return util::from_underlying<std::byte>(
-              static_cast<std::uint8_t>(rd_instance()));
-        });
-        return result;
-      }};
-
-  const auto iv_length_for_file_key_encryption{iv_length_helper(kek_cipher)};
+  // identify the size of the IV that will be used for file key
+  // encryption based on the KEK cipher; if the KEK cipher is in ECB mode, then
+  // the IV is not used and its size will be 0
+  const auto iv_size_for_file_key_encryption{
+      opensslpp::cipher_context::get_iv_size_in_bytes(kek_cipher)};
   util::optional_hex_value_storage iv_for_file_key_encryption{};
   util::const_byte_span iv_for_file_key_encryption_v{};
-  if (iv_length_for_file_key_encryption != 0U) {
-    iv_for_file_key_encryption =
-        random_blob_helper(iv_length_for_file_key_encryption);
+  if (iv_size_for_file_key_encryption != 0U) {
+    // generating random IV for file key encryption
+    iv_for_file_key_encryption.emplace(iv_size_for_file_key_encryption);
+    opensslpp::crypto_rng::generate(*iv_for_file_key_encryption);
     iv_for_file_key_encryption_v = *iv_for_file_key_encryption;
   }
 
-  const auto file_key_length{key_length_helper(kek_cipher)};
-  const auto file_key_data{random_blob_helper(file_key_length)};
+  // identify the size of the file key based on the active data cipher
+  const auto file_key_size{
+      opensslpp::cipher_context::get_key_size_in_bytes(active_data_cipher_)};
 
-  // TODO: implement encryption using OpenSSL EVP interface
-  const auto encrypt_helper{
-      [&tag_length_helper](
-          const std::string &cipher,
-          // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-          [[maybe_unused]] util::const_byte_span key_data,
-          [[maybe_unused]] util::const_byte_span iv_data,
-          util::const_byte_span data)
-          -> std::pair<util::hex_value_storage,
-                       util::optional_hex_value_storage> {
-        util::optional_hex_value_storage tag{};
-        const std::size_t tag_size{tag_length_helper(cipher)};
-        if (tag_size != 0U) {
-          tag = util::hex_value_storage(tag_size);
-          std::ranges::generate(
-              *tag, [counter{static_cast<std::uint8_t>(0U)}]() mutable {
-                return util::from_underlying<std::byte>(counter++);
-              });
-        }
-        util::hex_value_storage encrypted_data(std::size(data));
-        std::ranges::transform(
-            data, std::begin(encrypted_data), [](std::byte element) {
-              return std::byte{
-                  static_cast<std::uint8_t>(util::to_underlying(element) + 1U)};
-            });
+  // generating random file key
+  util::hex_value_storage file_key{file_key_size};
+  opensslpp::crypto_rng::generate(file_key);
 
-        return {encrypted_data, tag};
-      }};
+  // creating an encryption context with the KEK cipher, the KEK, and
+  // the IV for file key encryption
+  opensslpp::cipher_context file_key_encryption_context{
+      opensslpp::cipher_context_mode_type::encryption, kek_cipher, kek,
+      iv_for_file_key_encryption_v};
 
-  const auto file_key_encryption_result{encrypt_helper(
-      kek_cipher, kek_data, iv_for_file_key_encryption_v, file_key_data)};
+  // identify the size of the file key encryption tag from the encryption
+  // (should be non-zero only for GCM modes)
+  const auto file_key_encryption_tag_size{
+      file_key_encryption_context.get_tag_size_in_bytes()};
+  // provisioning the optional storage for the file key encryption tag
+  util::optional_hex_value_storage tag_of_file_key_encryption{};
+  util::byte_span tag_of_file_key_encryption_v{};
+  if (file_key_encryption_tag_size != 0U) {
+    tag_of_file_key_encryption.emplace(file_key_encryption_tag_size);
+    tag_of_file_key_encryption_v = *tag_of_file_key_encryption;
+  }
 
+  // performing the file key encryption and finalizing the tag (if any)
+  util::hex_value_storage file_key_encrypted_with_kek{file_key_size};
+  file_key_encryption_context.update(file_key, file_key_encrypted_with_kek);
+  file_key_encryption_context.finalize(tag_of_file_key_encryption_v);
+
+  // identifying the size of the IV that will be used for data encryption based
+  // on the active data cipher
   const auto iv_length_for_data_encryption{
-      iv_length_helper(active_data_cipher_)};
-  util::hex_value_storage iv_for_data_encryption{
-      random_blob_helper(iv_length_for_data_encryption)};
+      opensslpp::cipher_context::get_iv_size_in_bytes(active_data_cipher_)};
+  // generating random IV for file data encryption
+  util::hex_value_storage iv_for_data_encryption{iv_length_for_data_encryption};
+  opensslpp::crypto_rng::generate(iv_for_data_encryption);
 
-  util::hex_value_storage dummy_data{};
-  const auto data_encryption_result{encrypt_helper(
-      active_data_cipher_, file_key_data, iv_for_data_encryption, dummy_data)};
-
+  // the tag of data encryption will be generated during the actual data
+  // encryption
   binlog_encryption_record encryption_record{
       .kek_id = active_kek_id_,
-      .file_key_encrypted_with_kek = file_key_encryption_result.first,
+      .file_key_encrypted_with_kek = file_key_encrypted_with_kek,
       .iv_for_file_key_encryption = iv_for_file_key_encryption,
-      .tag_of_file_key_encryption = file_key_encryption_result.second,
+      .tag_of_file_key_encryption = tag_of_file_key_encryption,
       .data_cipher = active_data_cipher_,
       .iv_for_data_encryption = iv_for_data_encryption,
-      .tag_of_data_encryption = data_encryption_result.second};
+      .tag_of_data_encryption = {}};
 
   return encryption_record;
+}
+
+void storage::write_data_to_stream(
+    util::const_byte_span data,
+    const optional_binlog_encryption_record &encryption_record,
+    std::uint64_t offset) {
+  if (!encryption_record.has_value()) {
+    // an early return when no encryption is needed
+    backend_->write_data_to_stream(data);
+    return;
+  }
+
+  // as for security reasons our intent is to not store file keys in plaintext
+  // permanently, we need to decrypt the file key with the KEK before we can
+  // use it for data encryption.
+
+  const auto &keyring_record{keyring_->get_key(encryption_record->kek_id)};
+
+  const auto &kek_cipher{keyring_record.get<"cipher">()};
+  const auto &kek{keyring_record.get<"data_hex">().get_data()};
+
+  util::const_byte_span iv_for_file_key_encryption_v{};
+  if (encryption_record->iv_for_file_key_encryption.has_value()) {
+    iv_for_file_key_encryption_v =
+        *encryption_record->iv_for_file_key_encryption;
+  };
+  util::const_byte_span tag_of_file_key_encryption_v{};
+  if (encryption_record->tag_of_file_key_encryption.has_value()) {
+    tag_of_file_key_encryption_v =
+        *encryption_record->tag_of_file_key_encryption;
+  }
+
+  // creating a context for the file key decryption
+  opensslpp::cipher_context file_key_decryption_context{
+      opensslpp::cipher_context_mode_type::decryption, kek_cipher, kek,
+      iv_for_file_key_encryption_v, tag_of_file_key_encryption_v};
+  util::hex_value_storage file_key_decrypted{
+      std::size(encryption_record->file_key_encrypted_with_kek)};
+  file_key_decryption_context.update(
+      encryption_record->file_key_encrypted_with_kek, file_key_decrypted);
+  file_key_decryption_context.finalize();
+
+  // creating an context for data encryption with the data cipher, the file
+  // key (decrypted previously), and the IV for data encryption
+
+  auto data_encryption_context{opensslpp::cipher_context::create_with_offset(
+      offset, opensslpp::cipher_context_mode_type::encryption,
+      encryption_record->data_cipher, file_key_decrypted,
+      encryption_record->iv_for_data_encryption)};
+
+  util::optional_hex_value_storage tag_of_data_encryption{};
+  util::byte_span tag_of_data_encryption_v{};
+  const auto data_encryption_tag_size{
+      data_encryption_context.get_tag_size_in_bytes()};
+  if (data_encryption_tag_size != 0U) {
+    tag_of_data_encryption.emplace(data_encryption_tag_size);
+    tag_of_data_encryption_v = *tag_of_data_encryption;
+  }
+
+  util::hex_value_storage encrypted_data{std::size(data)};
+  data_encryption_context.update(data, encrypted_data);
+  data_encryption_context.finalize(tag_of_data_encryption_v);
+
+  backend_->write_data_to_stream(encrypted_data);
+
+  // TODO: update file data encryption tag here, if one day we decide to
+  //       support GCM mode for file data encryption
 }
 
 } // namespace binsrv

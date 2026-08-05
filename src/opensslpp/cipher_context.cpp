@@ -15,12 +15,20 @@
 
 #include "opensslpp/cipher_context.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
+#include <iterator>
 #include <string>
 #include <type_traits>
 #include <utility>
+
+#include <boost/container/container_fwd.hpp>
+#include <boost/container/static_vector.hpp>
+
+#include <boost/endian/conversion.hpp>
 
 #include <openssl/evp.h>
 #include <openssl/types.h>
@@ -210,6 +218,28 @@ cipher_context::get_iv_size_in_bytes(const std::string &cipher_name) {
       native_helper::get_native_cipher_by_name(cipher_name));
 }
 
+void cipher_context::extract_updated_iv(util::byte_span ivec) {
+  assert(!is_empty());
+  if (std::size(ivec) != get_iv_size_in_bytes()) {
+    util::exception_location().raise<core_error>(
+        "in cipher context invalid buffer size for extracting updated iv");
+  }
+
+  if (!std::in_range<int>(std::size(ivec))) {
+    util::exception_location().raise<core_error>(
+        "in cipher context buffer size is out of range for extracting updated "
+        "iv");
+  }
+  if (EVP_CIPHER_CTX_get_updated_iv(
+          native_helper::deimpl(impl_),
+          // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+          reinterpret_cast<unsigned char *>(std::data(ivec)),
+          std::size(ivec)) == 0) {
+    util::exception_location().raise<core_error>(
+        "cannot get updated iv for cipher context");
+  }
+}
+
 void cipher_context::update(util::const_byte_span input,
                             util::byte_span output) {
   assert(!is_empty());
@@ -233,26 +263,26 @@ void cipher_context::update(util::const_byte_span input,
     util::exception_location().raise<core_error>(
         "in cipher context update input size is out of range");
   }
-  const auto input_length_native{static_cast<int>(std::size(input))};
-  int output_length_native{0};
+  const auto input_size_native{static_cast<int>(std::size(input))};
+  int output_size_native{0};
   if (EVP_CipherUpdate(
           native_helper::deimpl(impl_), // context
           // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
           reinterpret_cast<unsigned char *>(std::data(output)), // output
-          &output_length_native,                                // output length
+          &output_size_native,                                  // output length
           // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
           reinterpret_cast<const unsigned char *>(std::data(input)), // input
-          input_length_native // input length
+          input_size_native // input length
           ) == 0) {
     util::exception_location().raise<core_error>(
         "cannot update cipher context");
   }
-  if (!std::in_range<std::size_t>(output_length_native)) {
+  if (!std::in_range<std::size_t>(output_size_native)) {
     util::exception_location().raise<core_error>(
         "in cipher context update output size is out of range");
   }
-  const auto output_length{static_cast<std::size_t>(output_length_native)};
-  if (output_length != std::size(output)) {
+  const auto output_size{static_cast<std::size_t>(output_size_native)};
+  if (output_size != std::size(output)) {
     util::exception_location().raise<core_error>(
         "in cipher context update the actual output size does not match the "
         "expected output size");
@@ -280,33 +310,33 @@ void cipher_context::finalize(util::byte_span output_tag) {
 
   using fake_buffer_type = std::array<std::byte, EVP_MAX_BLOCK_LENGTH>;
   fake_buffer_type fake_buffer;
-  int output_length_native{0};
+  int output_size_native{0};
   if (EVP_CipherFinal_ex(
           native_helper::deimpl(impl_),
           // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
           reinterpret_cast<unsigned char *>(std::data(fake_buffer)),
-          &output_length_native) == 0) {
+          &output_size_native) == 0) {
     util::exception_location().raise<core_error>(
         "cannot finalize cipher context");
   }
-  if (!std::in_range<std::size_t>(output_length_native)) {
+  if (!std::in_range<std::size_t>(output_size_native)) {
     util::exception_location().raise<core_error>(
         "in cipher context finalize output size is out of range");
   }
-  const auto output_length{static_cast<std::size_t>(output_length_native)};
-  if (output_length != 0U) {
+  const auto output_size{static_cast<std::size_t>(output_size_native)};
+  if (output_size != 0U) {
     util::exception_location().raise<core_error>(
         "in cipher context finalize the actual output size is not zero");
   }
 
   if (mode == cipher_context_mode_type::encryption) {
-    const auto tag_length_native{static_cast<int>(std::size(output_tag))};
+    const auto tag_size_native{static_cast<int>(std::size(output_tag))};
     void *const tag_ptr{
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
         const_cast<void *>(static_cast<const void *>(std::data(output_tag)))};
     if (EVP_CIPHER_CTX_ctrl(native_helper::deimpl(impl_), // context
                             EVP_CTRL_GCM_GET_TAG,         // type
-                            tag_length_native,            // length
+                            tag_size_native,              // length
                             tag_ptr                       // tag
                             ) == 0) {
       util::exception_location().raise<core_error>(
@@ -314,6 +344,59 @@ void cipher_context::finalize(util::byte_span output_tag) {
     }
   }
   impl_.reset();
+}
+
+cipher_context cipher_context::create_with_offset(
+    std::uint64_t offset, cipher_context_mode_type mode,
+    const std::string &cipher_name, util::const_byte_span key,
+    util::const_byte_span ivec, util::const_byte_span tag) {
+  if (offset == 0ULL) {
+    // early return when offset is zero to avoid unnecessary copying
+    return cipher_context{mode, cipher_name, key, ivec, tag};
+  }
+
+  // TODO: check if this function is called for one of the CTR ciphers
+  if (std::size(ivec) < sizeof(std::uint64_t)) {
+    util::exception_location().raise<core_error>(
+        "in cipher context creation with offset the size of the iv is too "
+        "small");
+  }
+
+  const std::byte *original_ivec_ptr{std::data(ivec)};
+  std::advance(original_ivec_ptr, std::size(ivec) - sizeof(std::uint64_t));
+  std::uint64_t counter{boost::endian::load_big_u64(
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      reinterpret_cast<const unsigned char *>(original_ivec_ptr))};
+
+  // this is true for most of the algorithms, including AES -
+  // we cannot use get_block_size_in_bytes() because it returns 1 for CTR and
+  // GCM
+
+  // TODO: rework with calling get_block_size_in_bytes() with modified cipher
+  //       name (change the mode part to "-ECB")
+  static constexpr std::uint64_t block_size{16ULL};
+  counter += offset / block_size;
+
+  using buffer_type = boost::container::static_vector<
+      std::byte, std::max(EVP_MAX_IV_LENGTH, EVP_MAX_BLOCK_LENGTH)>;
+  buffer_type modified_ivec{std::size(ivec)};
+  auto *dest_ptr{std::data(modified_ivec)};
+
+  const auto *source_en{std::data(ivec)};
+  std::advance(source_en, std::size(ivec) - sizeof(std::uint64_t));
+  dest_ptr = std::copy(std::data(ivec), source_en, dest_ptr);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  boost::endian::store_big_u64(reinterpret_cast<unsigned char *>(dest_ptr),
+                               counter);
+
+  cipher_context result{mode, cipher_name, key, modified_ivec, tag};
+
+  buffer_type source_dummy_block{offset % block_size,
+                                 boost::container::default_init};
+  buffer_type dest_dummy_block{offset % block_size};
+  result.update(source_dummy_block, dest_dummy_block);
+
+  return result;
 }
 
 } // namespace opensslpp

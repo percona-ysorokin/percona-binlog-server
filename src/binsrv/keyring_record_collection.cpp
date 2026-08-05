@@ -62,6 +62,14 @@ void keyring_record_collection::validate() const {
     util::exception_location().raise<std::invalid_argument>(
         "unsupported keyring record collection version");
   }
+  // TODO: make sure that all the keys have unique IDs
+
+  // TODO: make sure that all keys have ciphers known in OpenSSL
+  //       (currently only ECB, CBC, CTR, GCM modes are supported by
+  //       opensslpp::cipher_context)
+
+  // TODO: make sure that all keys have data_hex values of the correct length
+  //       that matches with the cipher
 }
 
 [[nodiscard]] std::string keyring_record_collection::get_description() const {

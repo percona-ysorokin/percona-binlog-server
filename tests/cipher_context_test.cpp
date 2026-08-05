@@ -170,6 +170,12 @@ BOOST_AUTO_TEST_CASE(CipherContextGetKeySizeStatic) {
   BOOST_CHECK_THROW(key_size = opensslpp::cipher_context::get_key_size_in_bytes(
                         invalid_cipher_name),
                     opensslpp::core_error);
+  BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-128-ECB") ==
+              16U);
+  BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-192-ECB") ==
+              24U);
+  BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-256-ECB") ==
+              32U);
   BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-128-CBC") ==
               16U);
   BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-192-CBC") ==
@@ -181,6 +187,12 @@ BOOST_AUTO_TEST_CASE(CipherContextGetKeySizeStatic) {
   BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-192-CTR") ==
               24U);
   BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-256-CTR") ==
+              32U);
+  BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-128-GCM") ==
+              16U);
+  BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-192-GCM") ==
+              24U);
+  BOOST_CHECK(opensslpp::cipher_context::get_key_size_in_bytes("AES-256-GCM") ==
               32U);
 }
 
@@ -621,4 +633,40 @@ BOOST_DATA_TEST_CASE(CipherContextRoundtripGCM,
   decryption_context.finalize();
 
   BOOST_CHECK(message == restored_message);
+}
+
+BOOST_DATA_TEST_CASE(CipherContextUpdatedIVCTR,
+                     boost::unit_test::data::make(bit_lengths) *
+                         boost::unit_test::data::make(stream_message_sizes),
+                     bit_length, message_size) {
+  const std::string cipher_name{"AES-" + std::to_string(bit_length) + "-CTR"};
+
+  const std::size_t valid_key_size{
+      opensslpp::cipher_context::get_key_size_in_bytes(cipher_name)};
+  const std::size_t valid_ivec_size{
+      opensslpp::cipher_context::get_iv_size_in_bytes(cipher_name)};
+
+  buffer_type key{valid_key_size};
+  buffer_type ivec{valid_ivec_size};
+  opensslpp::crypto_rng::generate(key);
+  opensslpp::crypto_rng::generate(ivec);
+
+  buffer_type message{message_size};
+  buffer_type encrypted_message{message_size};
+  opensslpp::crypto_rng::generate(message);
+
+  opensslpp::cipher_context encryption_context(
+      opensslpp::cipher_context_mode_type::encryption, cipher_name, key, ivec);
+  encryption_context.update(message, encrypted_message);
+
+  buffer_type updated_ivec{valid_ivec_size};
+  encryption_context.extract_updated_iv(updated_ivec);
+
+  auto fast_encryption_context{opensslpp::cipher_context::create_with_offset(
+      std::size(message), opensslpp::cipher_context_mode_type::encryption,
+      cipher_name, key, ivec)};
+  buffer_type fast_updated_ivec{valid_ivec_size};
+  fast_encryption_context.extract_updated_iv(fast_updated_ivec);
+
+  BOOST_CHECK(updated_ivec == fast_updated_ivec);
 }

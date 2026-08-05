@@ -78,9 +78,20 @@ public:
   // there is no static version of get_tag_size_in_bytes() as tag size is a
   // dynamic property of the cipher context
 
+  // this is not a const method as underlying EVP_CIPHER_CTX_get_updated_iv()
+  // accepts non-const EVP_CIPHER_CTX pointer
+  void extract_updated_iv(util::byte_span ivec);
+
   // TODO: implement void update_inplace(util::byte_span inoutput)
   void update(util::const_byte_span input, util::byte_span output);
   void finalize(util::byte_span output_tag = {});
+
+  static cipher_context create_with_offset(std::uint64_t offset,
+                                           cipher_context_mode_type mode,
+                                           const std::string &cipher_name,
+                                           util::const_byte_span key,
+                                           util::const_byte_span ivec = {},
+                                           util::const_byte_span tag = {});
 
 private:
   struct native_helper;
