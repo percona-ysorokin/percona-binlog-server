@@ -146,14 +146,24 @@ storage::storage(const storage_config &config,
       util::exception_location().raise<std::runtime_error>(
           "keyring does not contain the specified KEK ID");
     }
-    // TODO: make sure that random file keys (of length that corresponds to the
-    //       active data cipher) can be encrypted with the active KEK -
-    //       for instance, if active data cipher is AES-192-CRT (key length 24
-    //       bytes), then the active KEK cannot be of ECB or CBC mode as these
-    //       ciphers can only encrypt data of length that is a multiple of the
-    //       block size (16 bytes)
     active_kek_id_ = kek_id;
     active_data_cipher_ = encryption_config->get<"cipher">();
+
+    // make sure that random file keys (of length that corresponds to the
+    // active data cipher) can be encrypted with the active KEK -
+    // for instance, if active data cipher is AES-192-CRT (key length 24
+    // bytes), then the active KEK cannot be of ECB or CBC mode as these
+    // ciphers can only encrypt data of length that is a multiple of the
+    // block size (16 bytes)
+    const auto &keyring_record{keyring_->get_key(active_kek_id_)};
+    if (opensslpp::cipher_context::get_key_size_in_bytes(active_data_cipher_) %
+            opensslpp::cipher_context::get_block_size_in_bytes(
+                keyring_record.get<"cipher">()) !=
+        0U) {
+      util::exception_location().raise<std::runtime_error>(
+          "active data cipher key length is not compatible with the active "
+          "KEK cipher block size");
+    }
   }
 
   backend_ = storage_backend_factory::create(config);
@@ -896,7 +906,7 @@ storage::generate_binlog_encryption_record() const {
   // creating an encryption context with the KEK cipher, the KEK, and
   // the IV for file key encryption
   opensslpp::cipher_context file_key_encryption_context{
-      opensslpp::cipher_context_mode_type::encryption, kek_cipher, kek,
+      opensslpp::cipher_context_operation_type::encryption, kek_cipher, kek,
       iv_for_file_key_encryption_v};
 
   // identify the size of the file key encryption tag from the encryption
@@ -970,7 +980,7 @@ void storage::write_data_to_stream(
 
   // creating a context for the file key decryption
   opensslpp::cipher_context file_key_decryption_context{
-      opensslpp::cipher_context_mode_type::decryption, kek_cipher, kek,
+      opensslpp::cipher_context_operation_type::decryption, kek_cipher, kek,
       iv_for_file_key_encryption_v, tag_of_file_key_encryption_v};
   util::hex_value_storage file_key_decrypted{
       std::size(encryption_record->file_key_encrypted_with_kek)};
@@ -982,7 +992,7 @@ void storage::write_data_to_stream(
   // key (decrypted previously), and the IV for data encryption
 
   auto data_encryption_context{opensslpp::cipher_context::create_with_offset(
-      offset, opensslpp::cipher_context_mode_type::encryption,
+      offset, opensslpp::cipher_context_operation_type::encryption,
       encryption_record->data_cipher, file_key_decrypted,
       encryption_record->iv_for_data_encryption)};
 

@@ -647,7 +647,9 @@ If this section is present, then all the binlog data files will be encrypted bef
 - `<storage.encryption.format>` - specifies the encryption format (currently only `generic` is supported).
 - `<storage.encryption.keyring_uri>` - specifies location of the keyring JSON data file (currently only 'file://' scheme is supported meaning that the file should be taken from the local file sytem from the path specified in this URI, e.g. `file:///var/lib/pbs/keyring/keyring_data.json`).
 - `<storage.encryption.kek_id>` - specifies the ID of the key that must be used as a key-encryption-key (KEK). This ID must be present in the keyring.
-- `<storage.encryption.cipher>` - specifies the data-encryption cipher name used binlog data file encryption (e.g. `AES-256-CTR`).
+- `<storage.encryption.cipher>` - specifies the data-encryption cipher name used binlog data file encryption (e.g. `AES-256-CTR`). The cipher name specified here must be in `CTR` mode.
+
+Please also notice that not all combinations of the `cipher` and KEK identified by `kek_id` are supported. For instance, if the cipher from the keyring record identified by `kek_id` is either `AES-NNN-ECB` or `AES-NNN-CBC`, then they can encrypt only file keys with lengths that are a multiple of `16` bytes. In other words, in this case it is OK for `<storage.encryption.cipher>` to be `XXX-128-CTR` or `XXX-256-CTR`, but not OK to be `XXX-192-CTR`.
 
 ##### Keyring file format
 ```json
@@ -669,10 +671,13 @@ If this section is present, then all the binlog data files will be encrypted bef
 ```
 Keyring JSON file should represent a top-level JSON object with the following keys.
 - `version` - currently should always be equal to `1`.
-- `keys` - should be an array of objects tith the following keys
+- `keys` - should be an array of objects with the following keys
   - `id` - a unique string identifier of the key in the keyring.
   - `cipher` - the name of the symmetric cypher which should be used with this key (e.g `AES-256-GCM`).
   - `data_hex` - key bytes in hex format (typically `16`, `24`, or `32` bytes, meaning `32`, `48`, or `64` characters)
+
+Make sure that the mode of the `cipher` is one of the `ECB`, `CBC`, `CTR`, or `GCM`. Also, make sure that the key size identified from the cipher name matches the actual `data_hex` length (for instance, for `AES-256-GCM`, the key length should be `256` bits, meaning `32` bytes, meaning `64` hexadecimal characters).
+As for the `algoritm` part of the cipher name, PBS has been tested with `AES`, `AREA`, and `CAMELLIA`. However, other algorithms be supported as well.
 
 ### Resuming previous operation
 
