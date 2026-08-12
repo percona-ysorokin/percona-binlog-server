@@ -525,6 +525,9 @@ set(binsrv_source_files
   src/binsrv/logger_factory.hpp
   src/binsrv/logger_factory.cpp
 
+  src/binsrv/keyring_config_fwd.hpp
+  src/binsrv/keyring_config.hpp
+
   src/binsrv/keyring_factory.hpp
   src/binsrv/keyring_factory.cpp
 
