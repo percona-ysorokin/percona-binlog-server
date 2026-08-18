@@ -25,10 +25,12 @@
 #include <vector>
 
 #include "binsrv/basic_keyring_fwd.hpp"
+#include "binsrv/basic_logger_fwd.hpp"
 #include "binsrv/basic_storage_backend_fwd.hpp"
 #include "binsrv/encryption_config_fwd.hpp"
 #include "binsrv/encryption_format_type_fwd.hpp"
 #include "binsrv/keyring_config_fwd.hpp"
+#include "binsrv/log_severity_fwd.hpp"
 #include "binsrv/replication_mode_type_fwd.hpp"
 #include "binsrv/storage_config_fwd.hpp"
 
@@ -92,8 +94,8 @@ public:
 
   static constexpr std::size_t default_event_buffer_size_in_bytes{16384U};
 
-  // passing by value as we are going to move from this unique_ptr
-  storage(const optional_keyring_config &keyring_config,
+  storage(basic_logger_ptr logger,
+          const optional_keyring_config &keyring_config,
           const storage_config &config,
           storage_construction_mode_type construction_mode,
           replication_mode_type replication_mode);
@@ -207,6 +209,7 @@ public:
   }
 
 private:
+  basic_logger_ptr logger_;
   storage_construction_mode_type construction_mode_;
   basic_keyring_ptr keyring_;
   optional_encryption_format_type encryption_format_;
@@ -233,6 +236,9 @@ private:
   util::ctime_timestamp_range incomplete_transaction_timestamps_{};
   events::seq_no_t ready_to_flush_last_sequence_number_{0ULL};
   events::seq_no_t incomplete_transaction_last_sequence_number_{0ULL};
+
+  void log(log_severity level, std::string_view message) const;
+  void remove_temporary_objects(storage_object_name_container &object_names);
 
   void initialize_storage_encryption(
       const optional_encryption_config &encryption_config);

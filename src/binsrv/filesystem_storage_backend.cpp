@@ -42,15 +42,6 @@
 
 namespace binsrv {
 
-namespace {
-// suffix appended to the object name when writing the temporary file
-// used by the atomic-overwrite implementation of 'do_put_object'; a
-// deterministic name keeps cleanup-on-startup trivial - any stale
-// '<name>.tmp' left by a crashed put is simply overwritten by the
-// next legitimate put for the same name
-constexpr std::string_view tmp_object_suffix{".tmp"};
-} // namespace
-
 filesystem_storage_backend::filesystem_storage_backend(
     const storage_config &config)
     : root_path_{}, ofs_{} {
@@ -117,11 +108,6 @@ filesystem_storage_backend::do_list_objects() {
           "filesystem storage directory contains an entry that is not a "
           "regular file");
     }
-    if (dir_entry.path().extension() == tmp_object_suffix) {
-      // skip temporary files used by the atomic-overwrite implementation of
-      // 'do_put_object'
-      continue;
-    }
     // TODO: check permissions here
     result.emplace(dir_entry.path().filename().string(), dir_entry.file_size());
   }
@@ -150,7 +136,7 @@ void filesystem_storage_backend::do_put_object(std::string_view name,
   // rename itself survives a hard crash.
   const auto object_path = get_object_path(name);
   auto tmp_object_path = object_path;
-  tmp_object_path += tmp_object_suffix;
+  tmp_object_path += tmp_storage_object_suffix;
 
   util::write_file_content(tmp_object_path, util::as_string_view(content),
                            "underlying tmp object file");
@@ -168,6 +154,18 @@ void filesystem_storage_backend::do_put_object(std::string_view name,
         "cannot rename underlying tmp object file: " + rename_ec.message());
   }
   util::fsync(object_path.parent_path());
+}
+
+void filesystem_storage_backend::do_resize_object(std::string_view name,
+                                                  std::uint64_t new_size) {
+  const auto object_path{get_object_path(name)};
+  std::error_code resize_ec;
+  std::filesystem::resize_file(object_path, new_size, resize_ec);
+  if (resize_ec) {
+    util::exception_location().raise<std::runtime_error>(
+        "cannot resize underlying object file: " + resize_ec.message());
+  }
+  util::fsync(object_path);
 }
 
 void filesystem_storage_backend::do_remove_object(std::string_view name) {

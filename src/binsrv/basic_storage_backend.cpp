@@ -42,6 +42,11 @@ void basic_storage_backend::put_object(std::string_view name,
   do_put_object(name, content);
 }
 
+void basic_storage_backend::resize_object(std::string_view name,
+                                          std::uint64_t new_size) {
+  do_resize_object(name, new_size);
+}
+
 void basic_storage_backend::remove_object(std::string_view name) {
   do_remove_object(name);
   do_fsync();

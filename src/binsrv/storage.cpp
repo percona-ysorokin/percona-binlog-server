@@ -32,12 +32,14 @@
 #include <vector>
 
 #include "binsrv/basic_keyring.hpp"
+#include "binsrv/basic_logger.hpp"
 #include "binsrv/basic_storage_backend.hpp"
 #include "binsrv/binlog_file_metadata.hpp"
 #include "binsrv/encryption_format_type.hpp"
 #include "binsrv/keyring_config.hpp"
 #include "binsrv/keyring_factory.hpp"
 #include "binsrv/keyring_record.hpp"
+#include "binsrv/log_severity.hpp"
 #include "binsrv/replication_mode_type.hpp"
 #include "binsrv/storage_backend_factory.hpp"
 #include "binsrv/storage_config.hpp"
@@ -120,12 +122,13 @@ storage::binlog_encryption_record::from_model(
   return record;
 }
 
-storage::storage(const optional_keyring_config &keyring_config,
+storage::storage(basic_logger_ptr logger,
+                 const optional_keyring_config &keyring_config,
                  const storage_config &config,
                  storage_construction_mode_type construction_mode,
                  replication_mode_type replication_mode)
-    : construction_mode_{construction_mode}, backend_{},
-      replication_mode_{replication_mode} {
+    : logger_{std::move(logger)}, construction_mode_{construction_mode},
+      backend_{}, replication_mode_{replication_mode} {
   const auto &checkpoint_size_opt{config.get<"checkpoint_size">()};
   if (checkpoint_size_opt.has_value()) {
     checkpoint_size_bytes_ = checkpoint_size_opt->get_value();
@@ -146,6 +149,8 @@ storage::storage(const optional_keyring_config &keyring_config,
   backend_ = storage_backend_factory::create(config);
 
   auto storage_objects{backend_->list_objects()};
+  remove_temporary_objects(storage_objects);
+
   if (storage_objects.empty()) {
     // initialized on a new / empty storage - just save metadata and return
     if (construction_mode_ == storage_construction_mode_type::streaming) {
@@ -174,7 +179,7 @@ storage::storage(const optional_keyring_config &keyring_config,
     save_metadata();
   }
 
-  // if after metadata erasure 'storage_objects' is empty, then this mean
+  // if after metadata erasure 'storage_objects' is empty, then this means
   // that it has only metadata in it that passes validation and we can
   // consider it as an initialized empty storage, so just return
   if (storage_objects.empty()) {
@@ -507,6 +512,45 @@ storage::purge_binlogs(const events::composite_binlog_name &target) {
   return encryption_format_.has_value()
              ? std::string{to_string_view(*encryption_format_)}
              : std::string{"encryption format is not set"};
+}
+
+void storage::log(log_severity level, std::string_view message) const {
+  if (logger_) {
+    logger_->log(level, message);
+  }
+}
+
+void storage::remove_temporary_objects(
+    storage_object_name_container &object_names) {
+  using remove_object_container = std::vector<std::string>;
+  remove_object_container remove_objects;
+  for (auto it{std::begin(object_names)}; it != std::end(object_names);) {
+    const std::filesystem::path object_name{it->first};
+    if (object_name.has_extension() &&
+        object_name.extension() == tmp_storage_object_suffix) {
+      auto object_node = object_names.extract(it++);
+      remove_objects.emplace_back(std::move(object_node.key()));
+      log(log_severity::warning, "found temporary storage object '" +
+                                     object_name.string() +
+                                     "' left after improper shutdown");
+    } else {
+      ++it;
+    }
+  }
+  if (remove_objects.empty()) {
+    return;
+  }
+
+  // for querying-only mode we do not perform any modifying operations - just
+  // clear the 'object_names' container and return
+  if (construction_mode_ == storage_construction_mode_type::querying_only) {
+    return;
+  }
+
+  backend_->remove_objects(remove_objects);
+  log(log_severity::warning,
+      "removed " + std::to_string(remove_objects.size()) +
+          " temporary storage object(s) left after improper shutdown");
 }
 
 void storage::initialize_storage_encryption(
@@ -880,12 +924,32 @@ void storage::load_and_validate_binlog_metadata_set(
     // validating binlog size from the metadata only makes sense if we are not
     // in the querying_only mode
     if (construction_mode_ != storage_construction_mode_type::querying_only) {
+      const auto binlog_file_name{record_it->name.str()};
+      const auto actual_binlog_file_size{object_names.at(binlog_file_name)};
       // validating that the size stored in the metadata matches the actual size
-      if (loaded_binlog_metadata.size !=
-          object_names.at(record_it->name.str())) {
-        util::exception_location().raise<std::logic_error>(
-            "size from the binlog metadata does not match the actual binlog "
-            "size");
+      if (loaded_binlog_metadata.size != actual_binlog_file_size) {
+        // in case when Binlog Server process was not properly shut down
+        // there is a chance that there will be mismatch between the actual
+        // binlog data file size and the 'size' field in the binlog metadata
+
+        // if this mismatch was found in the most recent binlog file, we can
+        // perform automatic recovery (truncating binlog data file content to
+        // the size from the metadata)
+        if (std::next(record_it) != std::end(binlog_records_)) {
+          util::exception_location().raise<std::logic_error>(
+              "size from the binlog metadata does not match the actual binlog "
+              "size");
+        }
+        // performing recovery
+        if (loaded_binlog_metadata.size > actual_binlog_file_size) {
+          util::exception_location().raise<std::logic_error>(
+              "cannot perform recovery - size from the binlog metadata is "
+              "bigger than the actual binlog file size");
+        }
+        backend_->resize_object(binlog_file_name, loaded_binlog_metadata.size);
+        log(log_severity::warning,
+            "recovered binlog file '" + binlog_file_name +
+                "' by truncating it to the size from the metadata");
       }
     }
     *record_it = std::move(loaded_binlog_metadata);

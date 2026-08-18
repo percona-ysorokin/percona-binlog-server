@@ -710,6 +710,51 @@ void s3_storage_backend::do_put_object(std::string_view name,
       {.bucket = bucket_, .object_path = get_object_path(name)}, content);
 }
 
+void s3_storage_backend::do_resize_object(std::string_view name,
+                                          std::uint64_t new_size) {
+  // TODO: this operation can be implemented more efficiently by using S3
+  //       multipart upload API (call CreateMultipartUpload() for a temporary
+  //       copy of an object, call UploadPartCopy() just once referring
+  //       original object with truncated byte range, call
+  //       CompleteMultipartUpload(), call CopyObject() to overwrite original
+  //       object with the temporary one, and then DeleteObject() to remove
+  //       the temporary copy). There is a limitation that the minimal size
+  //       of a part in multipart upload (except the last one) is 5MB.
+  const auto resize_tmp_file_path{generate_tmp_file_path()};
+
+  const auto object_name{get_object_path(name)};
+
+  impl_->get_object_into_file({.bucket = bucket_, .object_path = object_name},
+                              resize_tmp_file_path);
+
+  std::error_code resize_ec;
+  std::filesystem::resize_file(resize_tmp_file_path, new_size, resize_ec);
+  if (resize_ec) {
+    util::exception_location().raise<std::runtime_error>(
+        "cannot resize underlying object file: " + resize_ec.message());
+  }
+
+  {
+    std::fstream resize_tmp_fstream{resize_tmp_file_path,
+                                    std::ios_base::in | std::ios_base::out |
+                                        std::ios_base::binary};
+    if (!resize_tmp_fstream.is_open()) {
+      util::exception_location().raise<std::runtime_error>(
+          "cannot open temporary file for S3 object resizing");
+    }
+
+    impl_->put_object_from_stream(
+        {.bucket = bucket_, .object_path = object_name}, resize_tmp_fstream);
+  }
+  std::error_code remove_ec;
+  std::filesystem::remove(resize_tmp_file_path, remove_ec);
+  if (remove_ec) {
+    util::exception_location().raise<std::runtime_error>(
+        "cannot remove temporary file after S3 object resizing: " +
+        remove_ec.message());
+  }
+}
+
 void s3_storage_backend::do_remove_object(std::string_view name) {
   impl_->delete_object(
       {.bucket = bucket_, .object_path = get_object_path(name)});

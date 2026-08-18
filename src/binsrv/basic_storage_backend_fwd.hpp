@@ -52,4 +52,11 @@ using storage_object_name_container =
                        std::equal_to<>>;
 } // namespace binsrv
 
+// suffix appended to the object name when writing the temporary file
+// used by the atomic-overwrite implementation of 'do_put_object'; a
+// deterministic name keeps cleanup-on-startup trivial - any stale
+// '<name>.tmp' left by a crashed put is simply overwritten by the
+// next legitimate put for the same name
+inline constexpr std::string_view tmp_storage_object_suffix{".tmp"};
+
 #endif // BINSRV_BASIC_STORAGE_BACKEND_FWD_HPP

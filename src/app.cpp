@@ -1035,7 +1035,9 @@ bool handle_list(std::string_view config_file_path) {
     const auto replication_mode{replication_config.get<"mode">()};
 
     const binsrv::storage storage{
-        keyring_config, storage_config,
+        {},
+        keyring_config,
+        storage_config,
         binsrv::storage_construction_mode_type::querying_only,
         replication_mode};
 
@@ -1072,7 +1074,9 @@ bool handle_search_by_timestamp(std::string_view config_file_path,
     const auto replication_mode{replication_config.get<"mode">()};
 
     const binsrv::storage storage{
-        keyring_config, storage_config,
+        {},
+        keyring_config,
+        storage_config,
         binsrv::storage_construction_mode_type::querying_only,
         replication_mode};
 
@@ -1118,7 +1122,9 @@ bool handle_purge_binlogs(std::string_view config_file_path,
     const auto &replication_config = config.root().get<"replication">();
     const auto replication_mode{replication_config.get<"mode">()};
 
-    binsrv::storage storage{keyring_config, storage_config,
+    binsrv::storage storage{{},
+                            keyring_config,
+                            storage_config,
                             binsrv::storage_construction_mode_type::purging,
                             replication_mode};
 
@@ -1168,7 +1174,9 @@ bool handle_search_by_gtid_set(std::string_view config_file_path,
     const auto replication_mode{replication_config.get<"mode">()};
 
     const binsrv::storage storage{
-        keyring_config, storage_config,
+        {},
+        keyring_config,
+        storage_config,
         binsrv::storage_construction_mode_type::querying_only,
         replication_mode};
 
@@ -1365,7 +1373,7 @@ int main(int argc, char *argv[]) {
     const auto replication_mode{replication_config.get<"mode">()};
     const auto optional_rewrite_config{replication_config.get<"rewrite">()};
 
-    binsrv::storage storage{keyring_config, storage_config,
+    binsrv::storage storage{logger, keyring_config, storage_config,
                             binsrv::storage_construction_mode_type::streaming,
                             replication_mode};
     log_storage_info(*logger, storage);
