@@ -134,6 +134,9 @@ install -D -m 0644  main_config.json %{buildroot}/%{_sysconfdir}/percona-binlog-
 
 
 %changelog
+* Wed Aug 21 2026 Yura Sorokin <yura.sorokin@percona.com> - 0.5.0-1
+- PBS-XX Placeholder.
+
 * Wed Aug 19 2026 Yura Sorokin <yura.sorokin@percona.com> - 0.4.1-1
 - PBS-21 Implement fixing recovery logic during storage initialization.
 
