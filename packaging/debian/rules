@@ -9,7 +9,7 @@ export DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 export CODENAME := $(shell . /etc/os-release && echo $$VERSION_CODENAME)
 
 # Versions
-export DEB_VERSION=0.4.1
+export DEB_VERSION=0.5.0
 export BOOST_VERSION=1.90.0
 export AWS_VERSION=1.11.774
 

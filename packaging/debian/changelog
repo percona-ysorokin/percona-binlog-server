@@ -1,3 +1,9 @@
+percona-binlog-server (0.5.0-1) unstable; urgency=low
+
+  * PBS-XX Placeholder.
+
+ -- Yura Sorokin <yura.sorokin@percona.com>  Fri, 21 Aug 2026 17:46:21 +0200
+
 percona-binlog-server (0.4.1-1) unstable; urgency=low
 
   * PBS-21 Implement fixing recovery logic during storage initialization.
