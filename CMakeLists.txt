@@ -476,6 +476,10 @@ set(operations_source_files
   src/operations/basic_operation.hpp
   src/operations/basic_operation.cpp
 
+  src/operations/collector_context_fwd.hpp
+  src/operations/collector_context.hpp
+  src/operations/collector_context.cpp
+
   src/operations/event_generation_helpers.hpp
   src/operations/event_generation_helpers.cpp
 

@@ -16,9 +16,12 @@
 #ifndef EASYMYSQL_LIBRARY_FWD_HPP
 #define EASYMYSQL_LIBRARY_FWD_HPP
 
+#include <memory>
+
 namespace easymysql {
 
 class library;
+using library_ptr = std::unique_ptr<library>;
 
 } // namespace easymysql
 
