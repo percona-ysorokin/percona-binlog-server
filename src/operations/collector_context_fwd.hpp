@@ -13,30 +13,13 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef BINSRV_STORAGE_FWD_HPP
-#define BINSRV_STORAGE_FWD_HPP
+#ifndef OPERATIONS_COLLECTOR_CONTEXT_FWD_HPP
+#define OPERATIONS_COLLECTOR_CONTEXT_FWD_HPP
 
-#include <cstdint>
-#include <memory>
+namespace operations {
 
-namespace binsrv {
+class collector_context;
 
-enum class storage_construction_mode_type : std::uint8_t {
-  querying_only,
-  streaming,
-  purging
-};
+} // namespace operations
 
-enum class open_binlog_status : std::uint8_t {
-  created,
-  opened_empty,
-  opened_at_magic_payload_offset,
-  opened_with_data_present
-};
-
-class storage;
-using storage_ptr = std::unique_ptr<storage>;
-
-} // namespace binsrv
-
-#endif // BINSRV_STORAGE_FWD_HPP
+#endif // OPERATIONS_COLLECTOR_CONTEXT_FWD_HPP
