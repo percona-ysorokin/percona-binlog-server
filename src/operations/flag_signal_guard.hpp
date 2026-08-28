@@ -13,33 +13,30 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef OPERATIONS_PULL_OPERATION_HPP
-#define OPERATIONS_PULL_OPERATION_HPP
-
-#include <string_view>
-
-#include "operations/generic_operation_fwd.hpp"
-
-#include "operations/basic_operation.hpp"
-#include "operations/mode_type.hpp"
-
-#include "util/command_line_helpers_fwd.hpp"
+#ifndef OPERATIONS_FLAG_SIGNAL_GUARD_HPP
+#define OPERATIONS_FLAG_SIGNAL_GUARD_HPP
 
 namespace operations {
 
-template <> class generic_operation<mode_type::pull> : public basic_operation {
+class flag_signal_guard {
 public:
-  static constexpr auto expected_number_of_arguments{1UZ};
+  struct signal_helper;
 
-  explicit generic_operation(util::command_line_arg_view cmd_args);
-  [[nodiscard]] bool execute() const override;
+  static const flag_signal_guard &instance();
+
+  flag_signal_guard(const flag_signal_guard &) = delete;
+  flag_signal_guard &operator=(const flag_signal_guard &) = delete;
+  flag_signal_guard(flag_signal_guard &&) = delete;
+  flag_signal_guard &operator=(flag_signal_guard &&) = delete;
+
+  ~flag_signal_guard() = default;
+
+  [[nodiscard]] bool is_flag_set() const volatile noexcept;
 
 private:
-  [[nodiscard]] std::string_view get_config_file_path() const noexcept {
-    return basic_operation::get_cmd_args()[2UZ];
-  }
+  flag_signal_guard();
 };
 
 } // namespace operations
 
-#endif // OPERATIONS_PULL_OPERATION_HPP
+#endif // OPERATIONS_FLAG_SIGNAL_GUARD_HPP

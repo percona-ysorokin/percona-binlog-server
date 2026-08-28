@@ -20,8 +20,6 @@
 
 #include <cstdint>
 
-#include "operations/mode_type_fwd.hpp"
-
 #include "util/command_line_helpers_fwd.hpp"
 
 namespace operations {
@@ -38,16 +36,14 @@ public:
   [[nodiscard]] virtual bool execute() const = 0;
 
 protected:
-  basic_operation(mode_type mode, util::command_line_arg_view cmd_args,
+  basic_operation(util::command_line_arg_view cmd_args,
                   std::size_t expected_number_of_arguments);
 
   [[nodiscard]] util::command_line_arg_view get_cmd_args() const noexcept {
     return cmd_args_;
   }
-  [[nodiscard]] mode_type get_mode() const noexcept { return mode_; }
 
 private:
-  mode_type mode_;
   util::command_line_arg_view cmd_args_;
 };
 

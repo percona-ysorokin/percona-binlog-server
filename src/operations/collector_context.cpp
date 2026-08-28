@@ -17,7 +17,6 @@
 
 #include "app_version.hpp"
 
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -49,8 +48,8 @@
 #include "easymysql/library.hpp"
 
 #include "operations/event_generation_helpers.hpp"
+#include "operations/flag_signal_guard.hpp"
 #include "operations/logger_helpers.hpp"
-#include "operations/mode_type.hpp"
 
 #include "util/byte_span_fwd.hpp"
 #include "util/command_line_helpers.hpp"
@@ -59,11 +58,12 @@
 namespace operations {
 
 collector_context::collector_context(
-    mode_type operation_mode, binsrv::main_config_ptr config,
-    binsrv::basic_logger_ptr logger,
-    const volatile std::atomic_flag &termination_flag)
-    : operation_mode_{operation_mode}, config_{std::move(config)},
-      logger_{std::move(logger)}, termination_flag_{&termination_flag} {
+    easymysql::connection_replication_mode_type connection_replication_mode,
+    binsrv::main_config_ptr config, binsrv::basic_logger_ptr logger,
+    const flag_signal_guard &termination_flag)
+    : connection_replication_mode_{connection_replication_mode},
+      config_{std::move(config)}, logger_{std::move(logger)},
+      termination_flag_{&termination_flag} {
   const auto &keyring_config{config_->root().get<"keyring">()};
   if (keyring_config.has_value()) {
     log_keyring_config_info(*logger_, *keyring_config);
@@ -141,14 +141,14 @@ void collector_context::reinitialize_logger_from_config(
               "application version: " + app_version.get_string());
 }
 
-void collector_context::receive_binlog_events() {
+bool collector_context::receive_binlog_events() {
   const auto &replication_config{config_->root().get<"replication">()};
 
   const auto verify_checksum{replication_config.get<"verify_checksum">()};
 
   easymysql::connection connection{};
   if (!open_connection_and_switch_to_replication(connection)) {
-    return;
+    return false;
   }
 
   // Network streams are requested with COM_BINLOG_DUMP and
@@ -166,7 +166,7 @@ void collector_context::receive_binlog_events() {
   bool fetch_result{};
 
   const auto &optional_rewrite_config{replication_config.get<"rewrite">()};
-  while (!termination_flag_->test() &&
+  while (!termination_flag_->is_flag_set() &&
          (fetch_result = connection.fetch_binlog_event(portion)) &&
          !portion.empty()) {
     if (portion[0] != expected_event_packet_prefix) {
@@ -187,20 +187,24 @@ void collector_context::receive_binlog_events() {
       process_binlog_event(current_event_v, context);
     }
   }
-  if (termination_flag_->test()) {
+  // the loop above can be terminated in three ways:
+  // 1) termination signal was received
+  //    (termination_flag_->is_flag_set() is true)
+  // 2) connection timed out waiting for events (fetch_result is false)
+  // 3) fetched everything and disconnected (fetch_result is true)
+  //    (can only happen in "fetch", non-blocking node)
+  if (termination_flag_->is_flag_set()) {
+    // case (1)
     logger_->log(binsrv::log_severity::info,
                  "fetching binlog events loop terminated by signal");
-    return;
+    return false;
   }
   if (fetch_result) {
-    logger_->log(binsrv::log_severity::info,
-                 "fetched everything and disconnected");
-    return;
+    // case (3)
+    return true;
   }
-  if (operation_mode_ == mode_type::fetch) {
-    util::exception_location().raise<std::logic_error>(
-        "fetch operation did not reach EOF reading binlog events");
-  }
+
+  // case (2)
 
   // Truncate the in-memory event buffer to the last completed transaction so
   // the persisted stream offset matches a transaction boundary. On reconnect,
@@ -215,6 +219,7 @@ void collector_context::receive_binlog_events() {
 
   logger_->log(binsrv::log_severity::info,
                "timed out waiting for events and disconnected");
+  return false;
 }
 
 bool collector_context::open_connection_and_switch_to_replication(
@@ -223,9 +228,6 @@ bool collector_context::open_connection_and_switch_to_replication(
     connection =
         mysql_lib_->create_connection(config_->root().get<"connection">());
   } catch (const easymysql::core_error &) {
-    if (operation_mode_ == mode_type::fetch) {
-      throw;
-    }
     logger_->log(binsrv::log_severity::error,
                  "unable to establish connection to mysql server");
     return false;
@@ -235,11 +237,6 @@ bool collector_context::open_connection_and_switch_to_replication(
                "established connection to mysql server");
 
   log_connection_info(*logger_, connection);
-
-  const auto blocking_mode{
-      operation_mode_ == mode_type::fetch
-          ? easymysql::connection_replication_mode_type::non_blocking
-          : easymysql::connection_replication_mode_type::blocking};
 
   const auto &replication_config{config_->root().get<"replication">()};
 
@@ -269,28 +266,26 @@ bool collector_context::open_connection_and_switch_to_replication(
 
       connection.switch_to_gtid_replication(
           server_id, util::const_byte_span{encoded_gtids_buffer},
-          verify_checksum, blocking_mode);
+          verify_checksum, connection_replication_mode_);
     } else {
       if (storage_->is_empty()) {
         connection.switch_to_position_replication(server_id, verify_checksum,
-                                                  blocking_mode);
+                                                  connection_replication_mode_);
       } else {
         connection.switch_to_position_replication(
             server_id, storage_->get_current_binlog_name().str(),
-            storage_->get_current_position(), verify_checksum, blocking_mode);
+            storage_->get_current_position(), verify_checksum,
+            connection_replication_mode_);
       }
     }
   } catch (const easymysql::core_error &) {
-    if (operation_mode_ == mode_type::fetch) {
-      throw;
-    }
     logger_->log(binsrv::log_severity::error,
                  "unable to switch to replication");
     return false;
   }
 
   log_replication_info(*logger_, server_id, *storage_, verify_checksum,
-                       blocking_mode);
+                       connection_replication_mode_);
   return true;
 }
 

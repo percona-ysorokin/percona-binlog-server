@@ -484,9 +484,11 @@ set(operations_source_files
   src/operations/event_generation_helpers.cpp
 
   src/operations/fetch_operation.hpp
+  src/operations/fetch_operation.cpp
 
-  src/operations/fetch_pull_operation.hpp
-  src/operations/fetch_pull_operation.cpp
+  src/operations/flag_signal_guard_fwd.hpp
+  src/operations/flag_signal_guard.hpp
+  src/operations/flag_signal_guard.cpp
 
   src/operations/generic_operation_fwd.hpp
 
@@ -506,6 +508,7 @@ set(operations_source_files
   src/operations/operation_factory.cpp
 
   src/operations/pull_operation.hpp
+  src/operations/pull_operation.cpp
 
   src/operations/purge_binlogs_operation.hpp
   src/operations/purge_binlogs_operation.cpp
