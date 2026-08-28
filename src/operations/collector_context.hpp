@@ -31,7 +31,7 @@
 #include "easymysql/connection_fwd.hpp"
 #include "easymysql/library_fwd.hpp"
 
-#include "operations/mode_type_fwd.hpp"
+#include "operations/flag_signal_guard_fwd.hpp"
 
 #include "util/command_line_helpers_fwd.hpp"
 
@@ -40,9 +40,10 @@ namespace operations {
 class collector_context {
 public:
   // deliberately passing by value as we will be moving from these objects
-  collector_context(mode_type operation_mode, binsrv::main_config_ptr config,
-                    binsrv::basic_logger_ptr logger,
-                    const volatile std::atomic_flag &termination_flag);
+  collector_context(
+      easymysql::connection_replication_mode_type connection_replication_mode,
+      binsrv::main_config_ptr config, binsrv::basic_logger_ptr logger,
+      const flag_signal_guard &termination_flag);
 
   collector_context(const collector_context &) = delete;
   collector_context &operator=(const collector_context &) = delete;
@@ -56,13 +57,14 @@ public:
   reinitialize_logger_from_config(binsrv::basic_logger_ptr &logger,
                                   const binsrv::main_config &config);
 
-  void receive_binlog_events();
+  // deliberately not marked as [[nodiscard]]
+  bool receive_binlog_events();
 
 private:
-  mode_type operation_mode_;
+  easymysql::connection_replication_mode_type connection_replication_mode_;
   binsrv::main_config_ptr config_;
   binsrv::basic_logger_ptr logger_;
-  const volatile std::atomic_flag *termination_flag_;
+  const flag_signal_guard *termination_flag_;
   binsrv::storage_ptr storage_{};
   easymysql::library_ptr mysql_lib_{};
 

@@ -16,18 +16,28 @@
 #ifndef OPERATIONS_FETCH_OPERATION_HPP
 #define OPERATIONS_FETCH_OPERATION_HPP
 
+#include <string_view>
+
 #include "operations/generic_operation_fwd.hpp"
 
-#include "operations/fetch_pull_operation.hpp"
+#include "operations/basic_operation.hpp"
 #include "operations/mode_type.hpp"
+
+#include "util/command_line_helpers_fwd.hpp"
 
 namespace operations {
 
-template <>
-class generic_operation<mode_type::fetch> : public fetch_pull_operation {
+template <> class generic_operation<mode_type::fetch> : public basic_operation {
 public:
-  explicit generic_operation(util::command_line_arg_view cmd_args)
-      : fetch_pull_operation{mode_type::fetch, cmd_args} {}
+  static constexpr auto expected_number_of_arguments{1UZ};
+
+  explicit generic_operation(util::command_line_arg_view cmd_args);
+  [[nodiscard]] bool execute() const override;
+
+private:
+  [[nodiscard]] std::string_view get_config_file_path() const noexcept {
+    return basic_operation::get_cmd_args()[2UZ];
+  }
 };
 
 } // namespace operations

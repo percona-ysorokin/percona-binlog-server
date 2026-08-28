@@ -37,8 +37,7 @@ namespace operations {
 
 generic_operation<mode_type::purge_binlogs>::generic_operation(
     util::command_line_arg_view cmd_args)
-    : basic_operation{mode_type::purge_binlogs, cmd_args,
-                      expected_number_of_arguments} {}
+    : basic_operation{cmd_args, expected_number_of_arguments} {}
 
 [[nodiscard]] bool
 generic_operation<mode_type::purge_binlogs>::execute() const {

@@ -27,8 +27,7 @@ namespace operations {
 
 generic_operation<mode_type::version>::generic_operation(
     util::command_line_arg_view cmd_args)
-    : basic_operation{mode_type::version, cmd_args,
-                      expected_number_of_arguments} {}
+    : basic_operation{cmd_args, expected_number_of_arguments} {}
 
 [[nodiscard]] bool generic_operation<mode_type::version>::execute() const {
   std::cout << app_version.get_string() << '\n';

@@ -34,8 +34,7 @@ namespace operations {
 
 generic_operation<mode_type::list>::generic_operation(
     util::command_line_arg_view cmd_args)
-    : basic_operation{mode_type::list, cmd_args, expected_number_of_arguments} {
-}
+    : basic_operation{cmd_args, expected_number_of_arguments} {}
 
 [[nodiscard]] bool generic_operation<mode_type::list>::execute() const {
   bool operation_successful{false};
