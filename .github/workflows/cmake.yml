@@ -21,7 +21,7 @@ env:
 
 jobs:
   formatting-check:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     name: Formatting checks
     steps:
       - name: Checking out source tree
@@ -59,7 +59,7 @@ jobs:
     # You can convert this to a matrix build if you need cross-platform coverage.
     # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
     name: ${{ matrix.config.name }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -151,10 +151,7 @@ jobs:
       if: endsWith(matrix.config.name, 'Valgrind')
       # installing Valgrind 3.25 here from Ubuntu 25.10 that has support for syscall 333
       run: |
-        sudo apt-get install libc6-dbg
-        wget -q http://mirrors.kernel.org/ubuntu/pool/main/v/valgrind/valgrind_3.25.1-0ubuntu1_amd64.deb
-        sudo dpkg -i valgrind_3.25.1-0ubuntu1_amd64.deb
-        rm -f valgrind_3.25.1-0ubuntu1_amd64.deb
+        sudo apt-get install valgrind
 
     - name: Fixing libaio1 for MySQL Server tarball
       if: matrix.config.run_mtr
